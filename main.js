@@ -3,199 +3,197 @@
    PT-BR Trainer 2.0 — Entry (ES Modules)
    GitHub Pages • Vanilla JS • iPhone-first
    ========================================= */
+
 import { registerServiceWorker } from "./src/core/sw-register.js";
 import { createUI } from "./src/core/ui.js";
 import { createRouter } from "./src/core/router.js";
-
-// Minimal placeholder render until features are added
-function render(route) {
-  const app = document.querySelector("#app");
-  if (!app) return;
-
-  const views = {
-    daily: () => `
-      <div class="card">
-        <div class="title">⚡ Daily Flow</div>
-        <div class="muted">App 2.0 Shell ist live. Nächster Schritt: Store + Daily Engine.</div>
-        <hr/>
-        <div class="row">
-          <button class="btn primary" id="btnToast">Toast testen</button>
-          <button class="btn" id="btnModal">Modal testen</button>
-        </div>
-      </div>
-    `,
-    learn: () => `
-      <div class="card">
-        <div class="title">📚 Lernen</div>
-        <div class="muted">Hier kommt Flip + 2-track SRS.</div>
-      </div>
-    `,
-    speak: () => `
-      <div class="card">
-        <div class="title">🎤 Sprechen</div>
-        <div class="muted">Hier kommt Shadowing + Stop Mic.</div>
-      </div>
-    `,
-    explore: () => `
-      <div class="card">
-        <div class="title">🧭 Themen</div>
-        <div class="muted">Hier kommen 20 Topics A1–C2 + Generator.</div>
-      </div>
-    `,
-    stats: () => `
-      <div class="card">
-        <div class="title">📈 Stats</div>
-        <div class="muted">Hier kommen KPIs + Charts.</div>
-      </div>
-    `,
-    settings: () => `
-      <div class="card">
-        <div class="title">⚙️ Settings</div>
-        <div class="muted">Hier kommen Packs, Zeitbudget, Hard Mode.</div>
-      </div>
-    `
-  };
-
-  const view = views[route] ? views[route]() : views.daily();
-  app.innerHTML = view;
-
-  // tiny demo bindings
-  const { toast, openModal } = window.UI || {};
-  document.querySelector("#btnToast")?.addEventListener("click", () => toast?.("Hallo 👋 PT-BR 2.0 ist bereit."));
-  document.querySelector("#btnModal")?.addEventListener("click", () => {
-    openModal?.(`
-      <div class="title">Quick Modal</div>
-      <p class="muted">Nächster Prompt: Store + Router + UI Utilities.</p>
-      <div class="row" style="margin-top:12px;">
-        <button class="btn primary" data-close="1">OK</button>
-      </div>
-    `);
-  });
-}
-
-function init() {
-  // UI helpers (toast/modal/sheet)
-  window.UI = createUI({
-    toastRoot: document.querySelector("#toastRoot"),
-    modalRoot: document.querySelector("#modalRoot"),
-    sheetRoot: document.querySelector("#sheetRoot"),
-  });
-
-  // Router (tabs + hash)
-  const router = createRouter({
-    defaultRoute: "daily",
-    tabsSelector: ".tab",
-    onRoute: (route) => render(route),
-  });
-
-  // top-right quick actions demo
-  document.querySelector("#btnQuick")?.addEventListener("click", () => {
-    window.UI.openSheet(`
-      <div class="title">Quick Actions</div>
-      <p class="muted">In App 2.0 kommt hier: Zeitbudget, Hard Mode, Packs.</p>
-      <div class="row" style="margin-top:12px;">
-        <button class="btn primary" data-close="1">Schließen</button>
-      </div>
-    `);
-  });
-
-  router.start();
-  registerServiceWorker("./sw.js");
-}
-
-document.addEventListener("DOMContentLoaded", init);
-
-// main.js
-import { createUI } from "./src/core/ui.js";
 import { getState, setState } from "./src/core/store.js";
 
-import { init as initSrs } from "./src/features/learn/srs.engine.js";
 import { initPacks } from "./src/features/content/packs.init.js";
+import { init as initSrs } from "./src/features/learn/srs.engine.js";
 
-import { renderDailyView } from "./src/features/daily/daily.view.js";
 import { createDailyController } from "./src/features/daily/daily.controller.js";
+import { renderDailyView } from "./src/features/daily/daily.view.js";
 
-import { renderLearnView } from "./src/features/learn/learn.view.js";
 import { createLearnController } from "./src/features/learn/learn.controller.js";
+import { renderLearnView } from "./src/features/learn/learn.view.js";
 
-import { renderSpeakView } from "./src/features/speak/speak.view.js";
 import { createSpeakController } from "./src/features/speak/speak.controller.js";
+import { renderSpeakView } from "./src/features/speak/speak.view.js";
 
 import { buildStats } from "./src/features/stats/stats.engine.js";
 import { renderStatsView } from "./src/features/stats/stats.view.js";
 
-const app = document.querySelector("#app");
-const toastRoot = document.querySelector("#toastRoot");
-const modalRoot = document.querySelector("#modalRoot");
-const sheetRoot = document.querySelector("#sheetRoot");
+/* ---------- App bootstrap ---------- */
 
-// UI
-const UI = createUI({ toastRoot, modalRoot, sheetRoot });
-window.UI = UI;
-
-// Store adapter for SRS + controllers
-const store = { getState, setState, subscribe: () => () => {} };
-
-// Init content + srs
-initPacks();
-initSrs({ getState, setState });
-
-// Controllers
-const learnController = createLearnController({ store, ui: UI });
-const speakController = createSpeakController({ ui: UI });
-let dailyController = null;
-
-function render(route) {
-  const state = getState();
-
-  if (route === "daily") {
-    dailyController ||= createDailyController({ store, ui: UI, router, learnController, speakController });
-    app.innerHTML = renderDailyView(dailyController.getModel());
-    bindReplace(dailyController);
-    return;
-  }
-
-  if (route === "learn") {
-    app.innerHTML = renderLearnView(learnController.getModel());
-    bindReplace(learnController);
-    return;
-  }
-
-  if (route === "speak") {
-    app.innerHTML = renderSpeakView(speakController.getModel());
-    bindReplace(speakController);
-    return;
-  }
-
-  if (route === "stats") {
-    const model = buildStats(state);
-    app.innerHTML = renderStatsView(model);
-    // simple static view: no controller needed
-    return;
-  }
-
-  // fallback
-  app.innerHTML = `
-    <div class="card">
-      <div class="title">🚧 ${route}</div>
-      <div class="muted">Dieser Screen kommt als Nächstes.</div>
-    </div>
-  `;
+function qs(sel) {
+  return document.querySelector(sel);
 }
 
-let unbind = null;
-function bindReplace(controller) {
-  if (typeof unbind === "function") unbind();
-  if (controller?.bind) unbind = controller.bind(app, () => render(router.getRoute()));
+function fatal(msg, err) {
+  console.error(msg, err);
+  const app = qs("#app");
+  if (app) {
+    app.innerHTML = `
+      <div class="card">
+        <div class="title">⚠️ Fehler</div>
+        <div class="muted">${escapeHtml(msg)}</div>
+        <hr/>
+        <div class="small muted">Öffne die Console für Details.</div>
+      </div>
+    `;
+  }
 }
 
-const router = createRouter({
-  onRouteChange: (route) => {
-    // keep in store (optional)
-    setState((s) => ({ ...s, ui: { ...s.ui, route } }));
-    render(route);
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function createStoreAdapter() {
+  // store.js ist dein zentraler State—Adapter macht die API konsistent
+  return { getState, setState, subscribe: () => () => {} };
+}
+
+function createAppContext() {
+  const appEl = qs("#app");
+  if (!appEl) throw new Error("Missing #app element in index.html");
+
+  const UI = createUI({
+    toastRoot: qs("#toastRoot"),
+    modalRoot: qs("#modalRoot"),
+    sheetRoot: qs("#sheetRoot"),
+  });
+  window.UI = UI;
+
+  const store = createStoreAdapter();
+
+  // init features (content + srs)
+  initPacks();
+  initSrs({ getState, setState });
+
+  // controllers
+  const learnController = createLearnController({ store, ui: UI });
+  const speakController = createSpeakController({ ui: UI });
+
+  // daily depends on router + controllers (wired later)
+  let dailyController = null;
+
+  return {
+    appEl,
+    UI,
+    store,
+    controllers: { learnController, speakController },
+    getOrCreateDailyController(router) {
+      if (!dailyController) {
+        dailyController = createDailyController({
+          store,
+          ui: UI,
+          router,
+          learnController,
+          speakController,
+        });
+      }
+      return dailyController;
+    }
+  };
+}
+
+/* ---------- Rendering + binding ---------- */
+
+function createRenderer(ctx) {
+  let unbind = null;
+
+  function bind(controller, router) {
+    if (typeof unbind === "function") unbind();
+    if (controller?.bind) {
+      unbind = controller.bind(ctx.appEl, () => render(router.getRoute()));
+    } else {
+      unbind = null;
+    }
+  }
+
+  function renderFallback(route) {
+    ctx.appEl.innerHTML = `
+      <div class="card">
+        <div class="title">🚧 ${escapeHtml(route)}</div>
+        <div class="muted">Dieser Screen kommt als Nächstes.</div>
+      </div>
+    `;
+    if (typeof unbind === "function") unbind();
+    unbind = null;
+  }
+
+  function render(route, router) {
+    const state = getState();
+
+    const routeHandlers = {
+      daily: () => {
+        const c = ctx.getOrCreateDailyController(router);
+        ctx.appEl.innerHTML = renderDailyView(c.getModel());
+        bind(c, router);
+      },
+
+      learn: () => {
+        const c = ctx.controllers.learnController;
+        ctx.appEl.innerHTML = renderLearnView(c.getModel());
+        bind(c, router);
+      },
+
+      speak: () => {
+        const c = ctx.controllers.speakController;
+        ctx.appEl.innerHTML = renderSpeakView(c.getModel());
+        bind(c, router);
+      },
+
+      stats: () => {
+        const model = buildStats(state);
+        ctx.appEl.innerHTML = renderStatsView(model);
+        if (typeof unbind === "function") unbind();
+        unbind = null;
+      },
+
+      explore: () => renderFallback(route),   // später
+      settings: () => renderFallback(route),  // später
+    };
+
+    const fn = routeHandlers[route] || (() => routeHandlers.daily());
+    fn();
+  }
+
+  return { render };
+}
+
+/* ---------- Start ---------- */
+
+function start() {
+  const ctx = createAppContext();
+  const renderer = createRenderer(ctx);
+
+  const router = createRouter({
+    defaultRoute: "daily",
+    tabsSelector: ".tab",
+    // Wichtig: DEIN router.js muss diese Callback-Signatur unterstützen:
+    onRouteChange: (route) => {
+      setState((s) => ({ ...s, ui: { ...s.ui, route } }));
+      renderer.render(route, router);
+    }
+  });
+
+  router.start();
+  renderer.render(router.getRoute(), router);
+
+  registerServiceWorker("./sw.js");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    start();
+  } catch (e) {
+    fatal("App konnte nicht gestartet werden. Prüfe index.html IDs + Console.", e);
   }
 });
-
-router.start();
-render(router.getRoute());
