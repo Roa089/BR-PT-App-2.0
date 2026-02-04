@@ -1,1 +1,65 @@
+<!-- index.html -->
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0c12" />
+  <title>PT-BR Trainer 2.0</title>
 
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PT-BR 2.0" />
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-badge">PT</div>
+        <div class="brand-text">
+          <div class="brand-title">PT-BR Trainer <span class="muted">2.0</span></div>
+          <div class="brand-sub">Daily Flow • Lernen • Sprechen</div>
+        </div>
+      </div>
+      <button class="iconbtn" id="btnQuick" aria-label="Quick actions">⋯</button>
+    </div>
+  </header>
+
+  <main id="app" class="app"></main>
+
+  <nav class="tabbar" aria-label="Navigation">
+    <button class="tab active" data-route="daily" aria-label="Daily">
+      <span class="tab-ico">⚡</span><span class="tab-lbl">Daily</span>
+    </button>
+    <button class="tab" data-route="learn" aria-label="Lernen">
+      <span class="tab-ico">📚</span><span class="tab-lbl">Lernen</span>
+    </button>
+    <button class="tab" data-route="speak" aria-label="Sprechen">
+      <span class="tab-ico">🎤</span><span class="tab-lbl">Sprechen</span>
+    </button>
+    <button class="tab" data-route="explore" aria-label="Themen">
+      <span class="tab-ico">🧭</span><span class="tab-lbl">Themen</span>
+    </button>
+    <button class="tab" data-route="stats" aria-label="Stats">
+      <span class="tab-ico">📈</span><span class="tab-lbl">Stats</span>
+    </button>
+    <button class="tab" data-route="settings" aria-label="Settings">
+      <span class="tab-ico">⚙️</span><span class="tab-lbl">Settings</span>
+    </button>
+  </nav>
+
+  <!-- UI Roots -->
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+  <div id="modal-root" class="modal-root" hidden></div>
+  <div id="sheet-root" class="sheet-root" hidden></div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
