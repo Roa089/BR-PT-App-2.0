@@ -3,6 +3,14 @@
    PT-BR Trainer 2.0 — Entry (ES Modules)
    GitHub Pages • Vanilla JS • iPhone-first
    ========================================= */
+const app = document.querySelector("#app");
+if (!app) {
+  alert("FEHLER: #app nicht gefunden. Prüfe index.html <main id='app'>");
+} else {
+  app.innerHTML = "<div style='padding:16px;color:white'>main.js läuft ✅</div>";
+}
+
+
 
 import { registerServiceWorker } from "./src/core/sw-register.js";
 import { createUI } from "./src/core/ui.js";
