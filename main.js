@@ -77,9 +77,9 @@ function render(route) {
 function init() {
   // UI helpers (toast/modal/sheet)
   window.UI = createUI({
-    toastRoot: document.querySelector("#toast-root"),
-    modalRoot: document.querySelector("#modal-root"),
-    sheetRoot: document.querySelector("#sheet-root"),
+    toastRoot: document.querySelector("#toastRoot"),
+    modalRoot: document.querySelector("#modalRoot"),
+    sheetRoot: document.querySelector("#sheetRoot"),
   });
 
   // Router (tabs + hash)
