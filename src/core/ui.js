@@ -1,5 +1,10 @@
 // src/core/ui.js
-export function createUI({ toastRoot, modalRoot, sheetRoot }) {
+/* =========================================
+   UI 2.0 — Toast + Modal + Sheet + Confirm
+   Vanilla JS • minimal dependencies
+   ========================================= */
+
+export function createUI({ toastRoot, modalRoot, sheetRoot } = {}) {
   let toastTimer = null;
 
   function toast(message, ms = 2200) {
@@ -16,9 +21,7 @@ export function createUI({ toastRoot, modalRoot, sheetRoot }) {
       <div class="backdrop" data-close="1"></div>
       <div class="modal">${html}</div>
     `;
-    modalRoot.querySelectorAll("[data-close]").forEach((el) =>
-      el.addEventListener("click", closeModal)
-    );
+    bindClose(modalRoot, closeModal);
   }
 
   function closeModal() {
@@ -34,9 +37,7 @@ export function createUI({ toastRoot, modalRoot, sheetRoot }) {
       <div class="backdrop" data-close="1"></div>
       <div class="sheet">${html}</div>
     `;
-    sheetRoot.querySelectorAll("[data-close]").forEach((el) =>
-      el.addEventListener("click", closeSheet)
-    );
+    bindClose(sheetRoot, closeSheet);
   }
 
   function closeSheet() {
@@ -45,16 +46,32 @@ export function createUI({ toastRoot, modalRoot, sheetRoot }) {
     sheetRoot.innerHTML = "";
   }
 
-  function confirm(text, onYes) {
+  function confirm(text, onYes, { yesLabel = "Ja", noLabel = "Nein", title = "Bestätigen" } = {}) {
     openSheet(`
-      <div class="title">Bestätigen</div>
+      <div class="title">${escapeHtml(title)}</div>
       <p class="muted">${escapeHtml(text)}</p>
       <div class="row" style="margin-top:12px;">
-        <button class="btn primary" id="uiYes" data-close="1">Ja</button>
-        <button class="btn" id="uiNo" data-close="1">Nein</button>
+        <button class="btn primary" id="uiYes" data-close="1" type="button">${escapeHtml(yesLabel)}</button>
+        <button class="btn" id="uiNo" data-close="1" type="button">${escapeHtml(noLabel)}</button>
       </div>
     `);
     document.querySelector("#uiYes")?.addEventListener("click", () => onYes?.());
+  }
+
+  function bindClose(root, onClose) {
+    root.querySelectorAll("[data-close]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        // If backdrop clicked or button clicked
+        const isBackdrop = el.classList.contains("backdrop");
+        if (isBackdrop || el.tagName.toLowerCase() === "button") onClose();
+        else onClose();
+      });
+    });
+
+    // ESC support for desktop
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") onClose();
+    }, { once: true });
   }
 
   return { toast, openModal, closeModal, openSheet, closeSheet, confirm };
