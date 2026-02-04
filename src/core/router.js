@@ -1,26 +1,43 @@
 // src/core/router.js
-export function createRouter({ defaultRoute = "daily", tabsSelector = ".tab", onRoute }) {
-  const routes = new Set(["daily", "learn", "speak", "explore", "stats", "settings"]);
+/* =========================================
+   Router 2.0 — Hash Router + Tab Binding
+   Vanilla JS • iPhone-first
+   ========================================= */
+
+const DEFAULT_ROUTES = ["daily", "learn", "speak", "explore", "stats", "settings"];
+
+export function createRouter({
+  routes = DEFAULT_ROUTES,
+  defaultRoute = "daily",
+  tabsSelector = ".tab",
+  onRouteChange
+} = {}) {
+  const routeSet = new Set(routes);
 
   function normalize(r) {
     const x = String(r || "").replace(/^#\/?/, "").trim();
-    return routes.has(x) ? x : defaultRoute;
+    return routeSet.has(x) ? x : defaultRoute;
   }
 
-  function getHashRoute() {
+  function getRouteFromHash() {
     return normalize(location.hash || `#/${defaultRoute}`);
   }
 
-  function setRoute(route) {
+  function setRoute(route, { replace = false } = {}) {
     const r = normalize(route);
-    if (location.hash !== `#/${r}`) location.hash = `#/${r}`;
+    const nextHash = `#/${r}`;
+    if (replace) history.replaceState(null, "", nextHash);
+    else if (location.hash !== nextHash) location.hash = nextHash;
+
     updateTabs(r);
-    onRoute?.(r);
+    onRouteChange?.(r);
+    return r;
   }
 
   function updateTabs(route) {
     document.querySelectorAll(tabsSelector).forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.route === route);
+      btn.setAttribute("aria-current", btn.dataset.route === route ? "page" : "false");
     });
   }
 
@@ -32,16 +49,26 @@ export function createRouter({ defaultRoute = "daily", tabsSelector = ".tab", on
 
   function start() {
     bindTabs();
-    const initial = getHashRoute();
+
+    const initial = getRouteFromHash();
     updateTabs(initial);
-    onRoute?.(initial);
+    onRouteChange?.(initial);
 
     window.addEventListener("hashchange", () => {
-      const r = getHashRoute();
+      const r = getRouteFromHash();
       updateTabs(r);
-      onRoute?.(r);
+      onRouteChange?.(r);
     });
+
+    // Ensure hash exists
+    if (!location.hash) setRoute(defaultRoute, { replace: true });
   }
 
-  return { start, setRoute };
+  return {
+    start,
+    setRoute,
+    getRoute: getRouteFromHash,
+    updateTabs,
+    routes
+  };
 }
