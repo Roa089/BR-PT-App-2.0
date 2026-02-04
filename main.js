@@ -105,3 +105,99 @@ function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+// main.js
+import { createRouter } from "./src/core/router.js";
+import { createUI } from "./src/core/ui.js";
+import { getState, setState } from "./src/core/store.js";
+
+import { init as initSrs } from "./src/features/learn/srs.engine.js";
+import { initPacks } from "./src/features/content/packs.init.js";
+
+import { renderDailyView } from "./src/features/daily/daily.view.js";
+import { createDailyController } from "./src/features/daily/daily.controller.js";
+
+import { renderLearnView } from "./src/features/learn/learn.view.js";
+import { createLearnController } from "./src/features/learn/learn.controller.js";
+
+import { renderSpeakView } from "./src/features/speak/speak.view.js";
+import { createSpeakController } from "./src/features/speak/speak.controller.js";
+
+import { buildStats } from "./src/features/stats/stats.engine.js";
+import { renderStatsView } from "./src/features/stats/stats.view.js";
+
+const app = document.querySelector("#app");
+const toastRoot = document.querySelector("#toastRoot");
+const modalRoot = document.querySelector("#modalRoot");
+const sheetRoot = document.querySelector("#sheetRoot");
+
+// UI
+const UI = createUI({ toastRoot, modalRoot, sheetRoot });
+window.UI = UI;
+
+// Store adapter for SRS + controllers
+const store = { getState, setState, subscribe: () => () => {} };
+
+// Init content + srs
+initPacks();
+initSrs({ getState, setState });
+
+// Controllers
+const learnController = createLearnController({ store, ui: UI });
+const speakController = createSpeakController({ ui: UI });
+let dailyController = null;
+
+function render(route) {
+  const state = getState();
+
+  if (route === "daily") {
+    dailyController ||= createDailyController({ store, ui: UI, router, learnController, speakController });
+    app.innerHTML = renderDailyView(dailyController.getModel());
+    bindReplace(dailyController);
+    return;
+  }
+
+  if (route === "learn") {
+    app.innerHTML = renderLearnView(learnController.getModel());
+    bindReplace(learnController);
+    return;
+  }
+
+  if (route === "speak") {
+    app.innerHTML = renderSpeakView(speakController.getModel());
+    bindReplace(speakController);
+    return;
+  }
+
+  if (route === "stats") {
+    const model = buildStats(state);
+    app.innerHTML = renderStatsView(model);
+    // simple static view: no controller needed
+    return;
+  }
+
+  // fallback
+  app.innerHTML = `
+    <div class="card">
+      <div class="title">🚧 ${route}</div>
+      <div class="muted">Dieser Screen kommt als Nächstes.</div>
+    </div>
+  `;
+}
+
+let unbind = null;
+function bindReplace(controller) {
+  if (typeof unbind === "function") unbind();
+  if (controller?.bind) unbind = controller.bind(app, () => render(router.getRoute()));
+}
+
+const router = createRouter({
+  onRouteChange: (route) => {
+    // keep in store (optional)
+    setState((s) => ({ ...s, ui: { ...s.ui, route } }));
+    render(route);
+  }
+});
+
+router.start();
+render(router.getRoute());
