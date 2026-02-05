@@ -5,17 +5,17 @@
    - Phrase Builder mini-mode
    ========================================= */
 
-export function renderSpeakView(model) {
+export function renderSpeakView(model = {}) {
   const {
-    mode, // "shadowing" | "builder"
-    card,
-    index,
-    total,
-    rate,
-    sttSupported,
-    listening,
-    lastTranscript,
-    diffHtml
+    mode = "shadowing", // "shadowing" | "builder"
+    card = null,
+    index = 0,
+    total = 0,
+    rate = 1.0,
+    sttSupported = false,
+    listening = false,
+    lastTranscript = "",
+    diffHtml = ""
   } = model;
 
   return `
@@ -30,33 +30,41 @@ export function renderSpeakView(model) {
       <div class="muted" style="margin-top:6px;">Fokus: laut sprechen. Kurz. Oft. Variationen.</div>
     </div>
 
-    ${mode === "shadowing" ? renderShadowing({ card, index, total, rate, sttSupported, listening, lastTranscript, diffHtml }) : renderBuilder()}
+    ${mode === "shadowing"
+      ? renderShadowing({ card, index, total, rate, sttSupported, listening, lastTranscript, diffHtml })
+      : renderBuilder()}
   `;
 }
 
 function renderShadowing({ card, index, total, rate, sttSupported, listening, lastTranscript, diffHtml }) {
+  const safeTotal = Math.max(0, Number(total || 0));
+  const safeIndex = Math.max(0, Math.min(safeTotal ? safeTotal - 1 : 0, Number(index || 0)));
+  const shownIndex = safeTotal ? safeIndex + 1 : 0;
+
+  const safeRate = clamp(Number(rate || 1), 0.7, 1.3);
+
   return `
     <div class="card">
       <div class="row" style="justify-content:space-between;">
-        <div class="pill">Queue: <b>${index + 1}</b>/${total}</div>
-        <div class="pill">Speed: <b>${Number(rate || 1).toFixed(1)}x</b></div>
+        <div class="pill">Queue: <b>${escapeHtml(String(shownIndex))}</b>/${escapeHtml(String(safeTotal))}</div>
+        <div class="pill">Speed: <b>${escapeHtml(safeRate.toFixed(1))}x</b></div>
       </div>
 
       <div style="margin-top:12px;">
-        <input data-act="rate" id="rate" type="range" min="0.7" max="1.3" step="0.1" value="${Number(rate || 1)}" />
+        <input data-act="rate" id="rate" type="range" min="0.7" max="1.3" step="0.1" value="${escapeHtml(String(safeRate))}" />
       </div>
 
       <hr/>
 
       ${card ? `
-        <div class="pt-big">${escapeHtml(card.pt)}</div>
+        <div class="pt-big">${escapeHtml(card.pt || "—")}</div>
         ${card.deHint ? `<div class="small muted" style="margin-top:10px;">${escapeHtml(card.deHint)}</div>` : ""}
 
         <div class="row" style="margin-top:14px;">
-          <button class="btn" data-act="prev" type="button">◀︎</button>
+          <button class="btn" data-act="prev" type="button" ${safeTotal > 0 && safeIndex > 0 ? "" : "disabled"}>◀︎</button>
           <button class="btn primary" data-act="play" type="button">▶︎ Anhören</button>
           <button class="btn" data-act="repeat" type="button">↻</button>
-          <button class="btn" data-act="next" type="button">▶︎▶︎</button>
+          <button class="btn" data-act="next" type="button" ${safeTotal > 0 && safeIndex < safeTotal - 1 ? "" : "disabled"}>▶︎▶︎</button>
         </div>
 
         <hr/>
@@ -84,7 +92,7 @@ function renderShadowing({ card, index, total, rate, sttSupported, listening, la
           ${diffHtml ? diffHtml : `<div class="small muted">Tipp: Sprich den Satz nach. Dann vergleicht die App Wort für Wort.</div>`}
         </div>
       ` : `
-        <div class="muted">Noch keine Shadowing-Queue. Starte über Daily Flow (kommt) oder später Explorer.</div>
+        <div class="muted">Noch keine Shadowing-Queue. Starte über Daily Flow.</div>
       `}
     </div>
   `;
@@ -135,8 +143,15 @@ function renderBuilder() {
 }
 
 function chip(text) {
-  const t = escapeHtml(text);
-  return `<button class="btn" data-act="builder:add" data-val="${t}" type="button">${t}</button>`;
+  const raw = String(text ?? "");
+  const label = escapeHtml(raw);
+  const val = escapeAttr(raw);
+  return `<button class="btn" data-act="builder:add" data-val="${val}" type="button">${label}</button>`;
+}
+
+function clamp(n, a, b) {
+  if (!Number.isFinite(n)) return a;
+  return Math.max(a, Math.min(b, n));
 }
 
 function escapeHtml(s) {
@@ -146,4 +161,9 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(s) {
+  // safe for attribute value in double quotes
+  return escapeHtml(String(s ?? "")).replaceAll("`", "&#096;");
 }
