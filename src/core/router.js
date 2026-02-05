@@ -6,9 +6,8 @@
 export function createRouter(opts = {}) {
   const defaultRoute = String(opts.defaultRoute || "daily");
   const tabsSelector = String(opts.tabsSelector || ".tab");
-  const onRouteChange = typeof opts.onRouteChange === "function"
-    ? opts.onRouteChange
-    : () => {};
+  const onRouteChange =
+    typeof opts.onRouteChange === "function" ? opts.onRouteChange : () => {};
 
   let current = defaultRoute;
   let started = false;
@@ -21,9 +20,9 @@ export function createRouter(opts = {}) {
   function readHashRoute() {
     const h = String(window.location.hash || "");
     if (!h || h === "#") return defaultRoute;
-    if (h.startsWith("#/")) return normalizeRoute(h.slice(2));
-    if (h.startsWith("#route=")) return normalizeRoute(h.slice(7));
-    return normalizeRoute(h.slice(1));
+    if (h.startsWith("#/")) return normalizeRoute(decodeURIComponent(h.slice(2)));
+    if (h.startsWith("#route=")) return normalizeRoute(decodeURIComponent(h.slice(7)));
+    return normalizeRoute(decodeURIComponent(h.slice(1)));
   }
 
   function writeHashRoute(route) {
@@ -36,12 +35,12 @@ export function createRouter(opts = {}) {
 
   function setActiveTabs(route) {
     const r = normalizeRoute(route);
-    const tabs = document.querySelectorAll(tabsSelector);
-    tabs.forEach((el) => {
+    document.querySelectorAll(tabsSelector).forEach((el) => {
       const er = normalizeRoute(el.getAttribute("data-route"));
       const isActive = er === r;
       el.classList.toggle("active", isActive);
-      el.setAttribute("aria-current", isActive ? "page" : "false");
+      if (isActive) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
     });
   }
 
@@ -66,6 +65,7 @@ export function createRouter(opts = {}) {
     if (!btn) return;
     const route = btn.getAttribute("data-route");
     if (!route) return;
+    e.preventDefault();
     apply(route, { fromHash: false });
   }
 
