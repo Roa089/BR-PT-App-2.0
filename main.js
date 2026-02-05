@@ -7,7 +7,7 @@
 import { registerServiceWorker } from "./src/core/sw-register.js";
 import { createUI } from "./src/core/ui.js";
 import { createRouter } from "./src/core/router.js";
-import { getState, setState } from "./src/core/store.js";
+import { getState, setState, subscribe } from "./src/core/store.js";
 
 import { initPacks } from "./src/features/content/packs.init.js";
 import { init as initSrs } from "./src/features/learn/srs.engine.js";
@@ -30,6 +30,15 @@ function qs(sel) {
   return document.querySelector(sel);
 }
 
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function fatal(msg, err) {
   console.error(msg, err);
   const app = qs("#app");
@@ -45,18 +54,9 @@ function fatal(msg, err) {
   }
 }
 
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function createStoreAdapter() {
-  // store.js ist dein zentraler State—Adapter macht die API konsistent
-  return { getState, setState, subscribe: () => () => {} };
+  // Echte Store-API durchreichen (wichtig für Re-Renders)
+  return { getState, setState, subscribe };
 }
 
 function createAppContext() {
@@ -68,6 +68,8 @@ function createAppContext() {
     modalRoot: qs("#modalRoot"),
     sheetRoot: qs("#sheetRoot"),
   });
+
+  // optional: debug
   window.UI = UI;
 
   const store = createStoreAdapter();
@@ -108,10 +110,11 @@ function createAppContext() {
 function createRenderer(ctx) {
   let unbind = null;
 
-  function bind(controller, router) {
+  function bind(controller, router, renderFn) {
     if (typeof unbind === "function") unbind();
     if (controller?.bind) {
-      unbind = controller.bind(ctx.appEl, () => render(router.getRoute()));
+      // WICHTIG: renderFn bekommt route + router
+      unbind = controller.bind(ctx.appEl, () => renderFn(router.getRoute(), router));
     } else {
       unbind = null;
     }
@@ -135,19 +138,19 @@ function createRenderer(ctx) {
       daily: () => {
         const c = ctx.getOrCreateDailyController(router);
         ctx.appEl.innerHTML = renderDailyView(c.getModel());
-        bind(c, router);
+        bind(c, router, render);
       },
 
       learn: () => {
         const c = ctx.controllers.learnController;
         ctx.appEl.innerHTML = renderLearnView(c.getModel());
-        bind(c, router);
+        bind(c, router, render);
       },
 
       speak: () => {
         const c = ctx.controllers.speakController;
         ctx.appEl.innerHTML = renderSpeakView(c.getModel());
-        bind(c, router);
+        bind(c, router, render);
       },
 
       stats: () => {
@@ -157,11 +160,12 @@ function createRenderer(ctx) {
         unbind = null;
       },
 
-      explore: () => renderFallback(route),   // später
-      settings: () => renderFallback(route),  // später
+      explore: () => renderFallback(route),
+      settings: () => renderFallback(route),
     };
 
-    const fn = routeHandlers[route] || (() => routeHandlers.daily());
+    // FIX: Default muss daily-FUNKTION sein, nicht Wrapper der nur zurückgibt
+    const fn = routeHandlers[route] || routeHandlers.daily;
     fn();
   }
 
@@ -177,7 +181,6 @@ function start() {
   const router = createRouter({
     defaultRoute: "daily",
     tabsSelector: ".tab",
-    // Wichtig: DEIN router.js muss diese Callback-Signatur unterstützen:
     onRouteChange: (route) => {
       setState((s) => ({ ...s, ui: { ...s.ui, route } }));
       renderer.render(route, router);
@@ -187,8 +190,19 @@ function start() {
   router.start();
   renderer.render(router.getRoute(), router);
 
-  registerServiceWorker("./sw.js");
+  // Service Worker: robust (nach load)
+  window.addEventListener("load", () => {
+    try {
+      registerServiceWorker("./sw.js", { scope: "./" }); // falls sw-register.js opts akzeptiert
+    } catch (e) {
+      console.warn("Service Worker Registrierung fehlgeschlagen:", e);
+    }
+  });
 }
+
+// Extra: Fehler sichtbar machen statt “still”
+window.addEventListener("error", (e) => fatal("Uncaught error", e.error || e.message));
+window.addEventListener("unhandledrejection", (e) => fatal("Unhandled promise rejection", e.reason));
 
 document.addEventListener("DOMContentLoaded", () => {
   try {
