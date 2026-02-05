@@ -8,10 +8,11 @@
    ========================================= */
 
 import { isSttSupported, startListening, stopListening } from "./stt.engine.js";
+import { speak as ttsSpeak, stop as ttsStop, isSupported as isTtsSupported } from "../../core/audio.js";
 
 export function createSpeakController({ ui } = {}) {
-  const _ui = ui || window.UI || {};
-  const toast = _ui.toast || ((m) => console.log(m));
+  const _ui = ui || (typeof window !== "undefined" ? window.UI : null) || {};
+  const toast = typeof _ui.toast === "function" ? _ui.toast.bind(_ui) : (m) => console.log(m);
 
   // state
   let mode = "shadowing";
@@ -27,7 +28,7 @@ export function createSpeakController({ ui } = {}) {
   let builderParts = [];
 
   function setQueue(cards) {
-    queue = Array.isArray(cards) ? cards : [];
+    queue = Array.isArray(cards) ? cards.filter(Boolean) : [];
     index = 0;
     resetCompare();
   }
@@ -40,22 +41,24 @@ export function createSpeakController({ ui } = {}) {
     lastTranscript = "";
     diffHtml = "";
     listening = false;
+    try { stopListening(); } catch {}
   }
 
   function play(text) {
     const c = current();
-    const t = text || c?.pt;
+    const t = String(text || c?.pt || "").trim();
     if (!t) return;
 
-    try {
-      const u = new SpeechSynthesisUtterance(String(t));
-      u.lang = "pt-BR";
-      u.rate = rate;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch {
+    if (!isTtsSupported()) {
       toast("TTS nicht verfügbar.");
+      return;
     }
+
+    ttsSpeak(t, {
+      lang: "pt-BR",
+      rate,
+      onError: () => toast("TTS nicht verfügbar.")
+    });
   }
 
   function next() {
@@ -80,7 +83,7 @@ export function createSpeakController({ ui } = {}) {
 
   function startSttCompare() {
     const c = current();
-    if (!c) return;
+    if (!c?.pt) return;
 
     if (!isSttSupported()) {
       toast("STT nicht verfügbar (iOS/Safari Einschränkung möglich).");
@@ -94,12 +97,12 @@ export function createSpeakController({ ui } = {}) {
     const res = startListening({
       lang: "pt-BR",
       onPartial: (text) => {
-        lastTranscript = text;
-        diffHtml = buildDiffHtml(c.pt, text);
+        lastTranscript = String(text || "");
+        diffHtml = buildDiffHtml(c.pt, lastTranscript);
       },
       onFinal: (text) => {
-        lastTranscript = text;
-        diffHtml = buildDiffHtml(c.pt, text);
+        lastTranscript = String(text || "");
+        diffHtml = buildDiffHtml(c.pt, lastTranscript);
       },
       onError: () => {
         listening = false;
@@ -107,14 +110,14 @@ export function createSpeakController({ ui } = {}) {
       }
     });
 
-    if (!res.ok) {
+    if (!res?.ok) {
       listening = false;
-      toast(res.reason);
+      toast(res?.reason || "STT konnte nicht gestartet werden.");
     }
   }
 
   function stopMic() {
-    stopListening();
+    try { stopListening(); } catch {}
     listening = false;
     toast("Mikrofon aus");
   }
@@ -163,28 +166,29 @@ export function createSpeakController({ ui } = {}) {
   function bind(root, rerender) {
     if (!root) return () => {};
 
+    const renderSafe = () => { try { rerender?.(); } catch {} };
+
     function onClick(e) {
       const el = e.target.closest("[data-act]");
       if (!el) return;
       const act = el.dataset.act;
 
-      // payloads
       if (act === "rate") {
-        const slider = el; // not a button
-        handleAction("rate", slider.value);
-        rerender?.();
+        handleAction("rate", el.value);
+        renderSafe();
+        updateBuilderOut();
         return;
       }
 
       if (act === "builder:add") {
         handleAction("builder:add", el.dataset.val);
-        rerender?.();
+        renderSafe();
         updateBuilderOut();
         return;
       }
 
       handleAction(act);
-      rerender?.();
+      renderSafe();
       updateBuilderOut();
     }
 
@@ -192,7 +196,7 @@ export function createSpeakController({ ui } = {}) {
       const el = e.target;
       if (el?.id === "rate") {
         handleAction("rate", el.value);
-        rerender?.();
+        renderSafe();
       }
     }
 
@@ -205,27 +209,26 @@ export function createSpeakController({ ui } = {}) {
     root.addEventListener("click", onClick);
     root.addEventListener("input", onInput);
 
-    // Keyboard shortcuts in shadowing:
-    // J: play, N: next, P: prev, R: repeat, M: stop mic
     function onKeyDown(e) {
-      const k = e.key.toLowerCase();
+      const k = String(e.key || "").toLowerCase();
       if (mode !== "shadowing") return;
 
       if (k === "j") { play(); e.preventDefault(); }
-      if (k === "n") { next(); rerender?.(); e.preventDefault(); }
-      if (k === "p") { prev(); rerender?.(); e.preventDefault(); }
-      if (k === "r") { repeat(); e.preventDefault(); }
-      if (k === "m") { stopMic(); rerender?.(); e.preventDefault(); }
+      else if (k === "n") { next(); renderSafe(); e.preventDefault(); }
+      else if (k === "p") { prev(); renderSafe(); e.preventDefault(); }
+      else if (k === "r") { repeat(); e.preventDefault(); }
+      else if (k === "m") { stopMic(); renderSafe(); e.preventDefault(); }
     }
     document.addEventListener("keydown", onKeyDown);
 
-    // initial builder output
     updateBuilderOut();
 
     return () => {
       root.removeEventListener("click", onClick);
       root.removeEventListener("input", onInput);
       document.removeEventListener("keydown", onKeyDown);
+      try { stopListening(); } catch {}
+      try { ttsStop(); } catch {}
     };
   }
 
@@ -237,6 +240,7 @@ export function createSpeakController({ ui } = {}) {
       index,
       total: queue.length,
       rate,
+      ttsSupported: isTtsSupported(),
       sttSupported: isSttSupported(),
       listening,
       lastTranscript,
@@ -258,24 +262,20 @@ function buildDiffHtml(target, spoken) {
   const t = tokenize(target);
   const s = tokenize(spoken);
 
-  const tSet = new Map();
-  for (const w of t) tSet.set(w, (tSet.get(w) || 0) + 1);
-
   const sSet = new Map();
   for (const w of s) sSet.set(w, (sSet.get(w) || 0) + 1);
 
-  const targetHtml = t.map(w => {
+  const targetHtml = t.map((w) => {
     const ok = (sSet.get(w) || 0) > 0;
     if (ok) sSet.set(w, (sSet.get(w) || 0) - 1);
     return `<span style="color:${ok ? "inherit" : "var(--danger)"}; font-weight:${ok ? "700" : "900"};">${escapeHtml(w)}</span>`;
   }).join(" ");
 
-  // rebuild sSet for extras calc
   const sCount = new Map();
   for (const w of s) sCount.set(w, (sCount.get(w) || 0) + 1);
   for (const w of t) if ((sCount.get(w) || 0) > 0) sCount.set(w, sCount.get(w) - 1);
 
-  const spokenHtml = s.map(w => {
+  const spokenHtml = s.map((w) => {
     const extra = (sCount.get(w) || 0) > 0;
     if (extra) sCount.set(w, (sCount.get(w) || 0) - 1);
     return `<span style="color:${extra ? "#60a5fa" : "inherit"}; font-weight:${extra ? "900" : "700"};">${escapeHtml(w)}</span>`;
@@ -292,8 +292,9 @@ function buildDiffHtml(target, spoken) {
 function tokenize(text) {
   return String(text || "")
     .toLowerCase()
-    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
-    .replace(/[^\wáéíóúãõçàâêô ]+/g, " ")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\w ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .split(" ")
@@ -301,6 +302,7 @@ function tokenize(text) {
 }
 
 function clamp(n, a, b) {
+  if (!Number.isFinite(n)) return a;
   return Math.max(a, Math.min(b, n));
 }
 
