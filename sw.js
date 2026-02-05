@@ -1,8 +1,13 @@
-// sw.js (robust, update-sicher)
-const CACHE_VERSION = "ptbr2-v3"; // bei jedem Deploy erhöhen
+// sw.js (robust, update-sicher, GitHub-Pages-safe)
+const CACHE_VERSION = "ptbr2-v4"; // bei jedem Deploy erhöhen
+const CACHE = CACHE_VERSION;
+
+const INDEX = new Request("./index.html", { cache: "reload" });
+
+// App-Shell: halte das klein + stabil
 const APP_SHELL = [
   "./",
-  "./index.html",
+  INDEX,
   "./style.css",
   "./main.js",
   "./manifest.webmanifest",
@@ -11,56 +16,66 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting(); // neue Version sofort aktivieren
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+
+    // Wichtig: nicht an einer fehlenden Datei scheitern
+    for (const item of APP_SHELL) {
+      try {
+        await cache.add(item);
+      } catch (e) {
+        // optional: loggen, aber nicht crashen
+        // console.warn("[SW] cache add failed:", item, e);
+      }
+    }
+  })());
+
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => (k === CACHE_VERSION ? null : caches.delete(k))));
-      await self.clients.claim(); // sofort Kontrolle über offene Tabs
-    })()
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => (k === CACHE ? null : caches.delete(k))));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Nur gleiche Origin cachen
+  // Nur gleiche Origin behandeln
   if (url.origin !== location.origin) return;
 
-  // Navigationen: network-first (wichtig für Deployments)
+  // NAVIGATION: network-first + fallback auf INDEX
   if (req.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        try {
-          const fresh = await fetch(req);
-          const cache = await caches.open(CACHE_VERSION);
-          cache.put("./index.html", fresh.clone());
-          return fresh;
-        } catch {
-          const cached = await caches.match("./index.html");
-          return cached || new Response("Offline", { status: 503 });
-        }
-      })()
-    );
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE);
+        cache.put(INDEX, fresh.clone()); // stabiler Key
+        return fresh;
+      } catch {
+        const cached = await caches.match(INDEX);
+        return cached || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+      }
+    })());
     return;
   }
 
-  // Assets: cache-first
-  event.respondWith(
-    (async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
-      const fresh = await fetch(req);
-      const cache = await caches.open(CACHE_VERSION);
-      cache.put(req, fresh.clone());
-      return fresh;
-    })()
-  );
+  // ASSETS: stale-while-revalidate (besser für Updates)
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(req);
+    const fetchPromise = fetch(req)
+      .then((fresh) => {
+        cache.put(req, fresh.clone());
+        return fresh;
+      })
+      .catch(() => null);
+
+    // sofort Cache liefern, im Hintergrund updaten
+    return cached || (await fetchPromise) || new Response("", { status: 504 });
+  })());
 });
