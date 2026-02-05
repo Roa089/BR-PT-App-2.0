@@ -7,7 +7,11 @@
 let _rec = null;
 
 export function isSttSupported() {
-  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  try {
+    return typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  } catch {
+    return false;
+  }
 }
 
 export function startListening({
@@ -20,36 +24,51 @@ export function startListening({
 } = {}) {
   stopListening();
 
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return { ok: false, reason: "SpeechRecognition nicht verfügbar (iOS/Safari Einschränkung möglich)." };
+  const SR = (() => {
+    try { return window.SpeechRecognition || window.webkitSpeechRecognition; } catch { return null; }
+  })();
+
+  if (!SR) {
+    return { ok: false, reason: "SpeechRecognition nicht verfügbar (iOS/Safari Einschränkung möglich)." };
+  }
 
   const rec = new SR();
-  rec.lang = lang;
+  rec.lang = String(lang || "pt-BR");
   rec.continuous = !!continuous;
   rec.interimResults = !!interimResults;
+
+  // Some engines require this for better results (harmless if ignored)
+  try { rec.maxAlternatives = 1; } catch {}
 
   let finalText = "";
 
   rec.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t + " ";
-      else interim += t;
-    }
-    const partial = (finalText + interim).trim();
-    onPartial?.(partial);
+    try {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = String(res?.[0]?.transcript || "");
+        if (res?.isFinal) finalText += (t ? t + " " : "");
+        else interim += t;
+      }
 
-    // In some implementations, final arrives gradually
-    if (finalText.trim()) onFinal?.(finalText.trim());
+      const partial = (finalText + interim).trim();
+      if (typeof onPartial === "function") onPartial(partial);
+
+      const ft = finalText.trim();
+      if (ft && typeof onFinal === "function") onFinal(ft);
+    } catch (err) {
+      if (typeof onError === "function") onError(err);
+    }
   };
 
   rec.onerror = (e) => {
-    onError?.(e);
+    try { if (typeof onError === "function") onError(e); } catch {}
   };
 
   rec.onend = () => {
-    _rec = null;
+    // only clear if this is the active instance
+    if (_rec === rec) _rec = null;
   };
 
   try {
@@ -65,7 +84,9 @@ export function startListening({
 
 export function stopListening() {
   if (_rec) {
+    try { _rec.onresult = null; _rec.onerror = null; _rec.onend = null; } catch {}
     try { _rec.stop(); } catch {}
+    try { _rec.abort?.(); } catch {}
     _rec = null;
   }
 }
