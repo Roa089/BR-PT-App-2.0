@@ -73,8 +73,9 @@ function migrateIfNeeded(raw) {
 
   // Forward migrations (best-effort)
   let s = raw;
+  const ms = migrations();
   for (let v = from + 1; v <= SCHEMA_VERSION; v++) {
-    const m = migrations()[v];
+    const m = ms[v];
     if (typeof m === "function") s = m(s);
   }
   s.schemaVersion = SCHEMA_VERSION;
@@ -120,10 +121,9 @@ export function setState(updater) {
       ? updater(prev)
       : deepMerge(prev, updater || {});
 
-  _state = normalize(next);
+  _state = normalizeState(next);
   save(_state);
 
-  // notify
   _subs.forEach((fn) => {
     try { fn(_state, prev); } catch {}
   });
@@ -146,7 +146,7 @@ export function resetStore() {
 }
 
 /* ---------- Normalizers / Guards ---------- */
-function normalize(s) {
+function normalizeState(s) {
   const d = defaultState();
   const out = deepMerge(d, s || {});
   out.schemaVersion = SCHEMA_VERSION;
@@ -290,7 +290,7 @@ export const actions = {
       let streak = Number(s.missions.streak || 0);
 
       if (!last) streak = 1;
-      else if (isYesterday(last, today)) streak = streak + 1;
+      else if (isYesterdayKey(last, today)) streak = streak + 1;
       else if (last !== today) streak = 1;
 
       return {
@@ -319,7 +319,7 @@ export const actions = {
     });
   },
 
-  // Progress setters (SRS engines will manage structures; these are generic helpers)
+  // Progress setters
   setProgress(track, cardId, payload) {
     const tr = track === "production" ? "productionSrs" : "comprehensionSrs";
     const id = String(cardId || "").trim();
@@ -359,23 +359,24 @@ export const selectors = {
 
 /* ---------- Helpers ---------- */
 function deepMerge(a, b) {
-  if (!b || typeof b !== "object") return { ...a };
-  const out = Array.isArray(a) ? [...a] : { ...(a || {}) };
+  const base = (a && typeof a === "object") ? a : {};
+  if (!b || typeof b !== "object") return { ...base };
+  const out = Array.isArray(base) ? [...base] : { ...base };
 
   for (const k of Object.keys(b)) {
     const bv = b[k];
     const av = out[k];
 
     if (Array.isArray(bv)) out[k] = [...bv];
-    else if (bv && typeof bv === "object") out[k] = deepMerge((av && typeof av === "object" && !Array.isArray(av)) ? av : {}, bv);
-    else out[k] = bv;
+    else if (bv && typeof bv === "object") {
+      out[k] = deepMerge((av && typeof av === "object" && !Array.isArray(av)) ? av : {}, bv);
+    } else out[k] = bv;
   }
   return out;
 }
 
 function clampToSet(n, allowed, fallback) {
   if (!Number.isFinite(n)) return fallback;
-  // pick nearest allowed
   let best = allowed[0];
   let bestDist = Math.abs(n - best);
   for (const v of allowed) {
@@ -392,20 +393,26 @@ function toDayKey(d) {
   return `${y}-${m}-${day}`;
 }
 
-function isYesterday(lastKey, todayKey) {
+// robust "yesterday" based on calendar days, not ms-diff (DST-safe)
+function isYesterdayKey(lastKey, todayKey) {
   const [y1, m1, d1] = lastKey.split("-").map(Number);
   const [y2, m2, d2] = todayKey.split("-").map(Number);
-  const a = new Date(y1, m1 - 1, d1);
-  const b = new Date(y2, m2 - 1, d2);
-  const diff = b - a;
-  return diff >= 24 * 60 * 60 * 1000 && diff < 48 * 60 * 60 * 1000;
+  const last = new Date(y1, m1 - 1, d1);
+  const today = new Date(y2, m2 - 1, d2);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  return (
+    last.getFullYear() === yesterday.getFullYear() &&
+    last.getMonth() === yesterday.getMonth() &&
+    last.getDate() === yesterday.getDate()
+  );
 }
 
 function dedupeImported(list) {
   const seen = new Set();
   const out = [];
   for (const c of list) {
-    const pt = normalize(c?.pt || "");
+    const pt = normalizeText(c?.pt || "");
     if (!pt) continue;
     if (seen.has(pt)) continue;
     seen.add(pt);
@@ -414,7 +421,7 @@ function dedupeImported(list) {
   return out;
 }
 
-function normalize(s) {
+function normalizeText(s) {
   return String(s || "")
     .toLowerCase()
     .normalize("NFD")
