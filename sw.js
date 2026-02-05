@@ -1,59 +1,66 @@
-// sw.js
-/* PT-BR Trainer 2.0 Service Worker (Cache-first + versioning + offline fallback) */
-
-const SW_VERSION = "ptbr2-v1";
-const CACHE_NAME = `cache-${SW_VERSION}`;
-
-const CORE_ASSETS = [
+// sw.js (robust, update-sicher)
+const CACHE_VERSION = "ptbr2-v3"; // bei jedem Deploy erhöhen
+const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./main.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
 ];
 
-// Install: pre-cache core
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+    caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL))
   );
-  self.skipWaiting();
+  self.skipWaiting(); // neue Version sofort aktivieren
 });
 
-// Activate: clean old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => (k === CACHE_VERSION ? null : caches.delete(k))));
+      await self.clients.claim(); // sofort Kontrolle über offene Tabs
+    })()
   );
-  self.clients.claim();
 });
 
-// Fetch: cache-first for same-origin GET; offline fallback to index.html
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET") return;
-
   const url = new URL(req.url);
-  const sameOrigin = url.origin === self.location.origin;
 
-  if (!sameOrigin) return;
+  // Nur gleiche Origin cachen
+  if (url.origin !== location.origin) return;
 
+  // Navigationen: network-first (wichtig für Deployments)
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(req);
+          const cache = await caches.open(CACHE_VERSION);
+          cache.put("./index.html", fresh.clone());
+          return fresh;
+        } catch {
+          const cached = await caches.match("./index.html");
+          return cached || new Response("Offline", { status: 503 });
+        }
+      })()
+    );
+    return;
+  }
+
+  // Assets: cache-first
   event.respondWith(
-    caches.match(req).then((cached) => {
+    (async () => {
+      const cached = await caches.match(req);
       if (cached) return cached;
-
-      return fetch(req)
-        .then((res) => {
-          // cache a copy
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match("./index.html"));
-    })
+      const fresh = await fetch(req);
+      const cache = await caches.open(CACHE_VERSION);
+      cache.put(req, fresh.clone());
+      return fresh;
+    })()
   );
 });
