@@ -7,9 +7,14 @@
    ========================================= */
 
 let _current = null;
+let _queueToken = 0;
 
 export function isSupported() {
-  return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  return (
+    typeof window !== "undefined" &&
+    "speechSynthesis" in window &&
+    "SpeechSynthesisUtterance" in window
+  );
 }
 
 export function stop() {
@@ -17,6 +22,7 @@ export function stop() {
     window.speechSynthesis?.cancel();
   } catch {}
   _current = null;
+  _queueToken++;
 }
 
 export function speak(text, opts = {}) {
@@ -35,6 +41,8 @@ export function speak(text, opts = {}) {
 
   try {
     stop();
+    const token = ++_queueToken;
+
     const u = new SpeechSynthesisUtterance(t);
     u.lang = lang;
     u.rate = clamp(Number(rate), 0.7, 1.3);
@@ -42,10 +50,13 @@ export function speak(text, opts = {}) {
     u.volume = clamp(Number(volume), 0, 1);
 
     u.onend = () => {
+      if (token !== _queueToken) return;
       _current = null;
       onEnd?.();
     };
+
     u.onerror = (e) => {
+      if (token !== _queueToken) return;
       _current = null;
       onError?.(e);
     };
@@ -53,18 +64,24 @@ export function speak(text, opts = {}) {
     _current = u;
     window.speechSynthesis.speak(u);
     return { ok: true };
-  } catch (e) {
+  } catch {
     _current = null;
     return { ok: false, reason: "tts_error" };
   }
 }
 
 export function speakSequence(lines, opts = {}) {
-  const arr = Array.isArray(lines) ? lines.map(x => String(x || "").trim()).filter(Boolean) : [];
+  const arr = Array.isArray(lines)
+    ? lines.map((x) => String(x || "").trim()).filter(Boolean)
+    : [];
+
   if (!arr.length) return { ok: false, reason: "empty" };
+
   let i = 0;
+  const token = ++_queueToken;
 
   const playNext = () => {
+    if (token !== _queueToken) return;
     if (i >= arr.length) {
       opts.onDone?.();
       return;
@@ -72,7 +89,8 @@ export function speakSequence(lines, opts = {}) {
     const line = arr[i++];
     speak(line, {
       ...opts,
-      onEnd: playNext
+      onEnd: playNext,
+      onError: () => playNext()
     });
   };
 
