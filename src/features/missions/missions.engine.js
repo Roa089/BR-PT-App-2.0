@@ -7,25 +7,38 @@
    ========================================= */
 
 export function initMissions(store) {
-  if (!store?.getState || !store?.setState) throw new Error("initMissions(store) requires getState/setState");
+  if (!store?.getState || !store?.setState) {
+    throw new Error("initMissions(store) requires getState/setState");
+  }
   return createMissionsAPI(store);
 }
 
 function createMissionsAPI(store) {
   function dayKey(d = new Date()) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const da = String(d.getDate()).padStart(2, "0");
+    const dt = d instanceof Date ? d : new Date(d);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const da = String(dt.getDate()).padStart(2, "0");
     return `${y}-${m}-${da}`;
   }
 
-  function isYesterday(lastKey, todayKey) {
-    const [y1, m1, d1] = lastKey.split("-").map(Number);
-    const [y2, m2, d2] = todayKey.split("-").map(Number);
-    const a = new Date(y1, m1 - 1, d1);
-    const b = new Date(y2, m2 - 1, d2);
-    const diff = b - a;
-    return diff >= 24 * 60 * 60 * 1000 && diff < 48 * 60 * 60 * 1000;
+  function isYesterdayKey(lastKey, todayKey) {
+    if (!lastKey || !todayKey) return false;
+    const [y1, m1, d1] = String(lastKey).split("-").map(Number);
+    const [y2, m2, d2] = String(todayKey).split("-").map(Number);
+    if (!Number.isFinite(y1) || !Number.isFinite(m1) || !Number.isFinite(d1)) return false;
+    if (!Number.isFinite(y2) || !Number.isFinite(m2) || !Number.isFinite(d2)) return false;
+
+    const last = new Date(y1, m1 - 1, d1);
+    const today = new Date(y2, m2 - 1, d2);
+    const y = new Date(today);
+    y.setDate(today.getDate() - 1);
+
+    return (
+      last.getFullYear() === y.getFullYear() &&
+      last.getMonth() === y.getMonth() &&
+      last.getDate() === y.getDate()
+    );
   }
 
   function ensureDaily(dp, key) {
@@ -35,12 +48,13 @@ function createMissionsAPI(store) {
 
   function markActive(date = new Date()) {
     const today = dayKey(date);
+
     store.setState((s) => {
-      const last = s.missions?.lastActiveDay;
-      let streak = Number(s.missions?.streak || 0);
+      const last = s.missions?.lastActiveDay || null;
+      let streak = Math.max(0, Number(s.missions?.streak || 0));
 
       if (!last) streak = 1;
-      else if (isYesterday(last, today)) streak = streak + 1;
+      else if (isYesterdayKey(last, today)) streak = streak + 1;
       else if (last !== today) streak = 1;
 
       return {
@@ -93,7 +107,7 @@ function createMissionsAPI(store) {
   }
 
   function getToday(date = new Date()) {
-    const s = store.getState();
+    const s = store.getState?.() || {};
     const key = dayKey(date);
     const dp = s.missions?.dailyProgress || {};
     return dp[key] || { reviews: 0, newInput: 0, speaking: 0, story: 0, xpEarned: 0 };
