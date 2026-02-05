@@ -13,24 +13,53 @@ import { getDue, getNew } from "../learn/srs.engine.js";
  * options: { timeBudgetMin }
  * returns { reviews:[], newInput:[], speaking:[] }
  */
-export function buildDailyPlan(state, options = {}) {
-  const timeBudget = Number(options.timeBudgetMin || state.userPrefs?.timeBudgetMin || 20);
+export function buildDailyPlan(state = {}, options = {}) {
+  const timeBudget = Number(
+    options.timeBudgetMin ||
+    state.userPrefs?.timeBudgetMin ||
+    20
+  );
 
   const limits = limitsFromTime(timeBudget);
 
-  const allCards = getCardsLazy(8000);
+  let allCards = [];
+  try {
+    allCards = Array.isArray(getCardsLazy(8000)) ? getCardsLazy(8000) : [];
+  } catch (e) {
+    console.error("[DailyEngine] getCardsLazy failed", e);
+    allCards = [];
+  }
 
-  // weakness by topic (production)
   const weakTopics = getWeakProductionTopics(state, allCards);
+  const filters = weakTopics.length ? { topics: weakTopics } : {};
 
-  const filters = weakTopics.length
-    ? { topics: weakTopics }
-    : {};
+  let reviews = [];
+  let newInput = [];
 
-  const reviews = getDue("comprehension", allCards, filters).slice(0, limits.reviews);
-  const newInput = getNew(allCards, filters, limits.newInput);
+  try {
+    reviews = Array.isArray(getDue("comprehension", allCards, filters))
+      ? getDue("comprehension", allCards, filters).slice(0, limits.reviews)
+      : [];
+  } catch (e) {
+    console.error("[DailyEngine] getDue failed", e);
+    reviews = [];
+  }
 
-  const speaking = buildSpeakingQueue(state, allCards, weakTopics, limits.speaking);
+  try {
+    newInput = Array.isArray(getNew(allCards, filters, limits.newInput))
+      ? getNew(allCards, filters, limits.newInput)
+      : [];
+  } catch (e) {
+    console.error("[DailyEngine] getNew failed", e);
+    newInput = [];
+  }
+
+  const speaking = buildSpeakingQueue(
+    state,
+    allCards,
+    weakTopics,
+    limits.speaking
+  );
 
   return { reviews, newInput, speaking };
 }
@@ -49,31 +78,35 @@ function getWeakProductionTopics(state, cards) {
   const topicStats = {};
 
   for (const c of cards) {
+    if (!c || !c.id || !c.topic) continue;
     const p = prod[c.id];
     if (!p) continue;
 
-    if (!topicStats[c.topic]) {
-      topicStats[c.topic] = { reps: 0, lapses: 0 };
+    const t = c.topic;
+    if (!topicStats[t]) {
+      topicStats[t] = { reps: 0, lapses: 0 };
     }
-    topicStats[c.topic].reps += p.reps || 0;
-    topicStats[c.topic].lapses += p.lapses || 0;
+    topicStats[t].reps += Number(p.reps || 0);
+    topicStats[t].lapses += Number(p.lapses || 0);
   }
 
-  const scored = Object.entries(topicStats).map(([topic, v]) => {
-    const ratio = v.reps > 0 ? v.lapses / v.reps : 1;
-    return { topic, weakness: ratio };
-  });
-
-  scored.sort((a, b) => b.weakness - a.weakness);
-
-  return scored.slice(0, 3).map(x => x.topic);
+  return Object.entries(topicStats)
+    .map(([topic, v]) => ({
+      topic,
+      weakness: v.reps > 0 ? v.lapses / v.reps : 1
+    }))
+    .sort((a, b) => b.weakness - a.weakness)
+    .slice(0, 3)
+    .map(x => x.topic);
 }
 
 function buildSpeakingQueue(state, cards, weakTopics, limit) {
   const prod = state.progress?.productionSrs || {};
-  let pool = cards.filter(c => c.skill === "dialog" || c.skill === "statement");
+  let pool = cards.filter(
+    c => c && (c.skill === "dialog" || c.skill === "statement")
+  );
 
-  if (weakTopics && weakTopics.length) {
+  if (Array.isArray(weakTopics) && weakTopics.length) {
     pool = pool.filter(c => weakTopics.includes(c.topic));
   }
 
@@ -95,5 +128,5 @@ function buildSpeakingQueue(state, cards, weakTopics, limit) {
 }
 
 function buildRoleplayPrompt(card) {
-  return `Responda naturalmente: "${card.pt}"`;
+  return `Responda naturalmente: "${card?.pt || ""}"`;
 }
