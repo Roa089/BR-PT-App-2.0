@@ -23,11 +23,35 @@ import { packHumorIdioms } from "../../packs/pack_18_humor_idioms.js";
 import { packNegotiation } from "../../packs/pack_19_negotiation.js";
 import { packPresenting } from "../../packs/pack_20_presenting.js";
 
+const ALL_PACKS = [
+  packSmalltalk,
+  packTravel,
+  packFood,
+  packWork,
+  packHealth,
+  packDebate,
+  packFamily,
+  packFeelings,
+  packConflict,
+  packAuthorities,
+  packFinance,
+  packTech,
+  packNewsOpinion,
+  packCulture,
+  packFriendsDating,
+  packHousing,
+  packEmergencies,
+  packHumorIdioms,
+  packNegotiation,
+  packPresenting
+];
+
 export function initPacks() {
-  [
-    packSmalltalk, packTravel, packFood, packWork, packHealth, packDebate,
-    packFamily, packFeelings, packConflict, packAuthorities, packFinance,
-    packTech, packNewsOpinion, packCulture, packFriendsDating, packHousing,
-    packEmergencies, packHumorIdioms, packNegotiation, packPresenting
-  ].forEach(registerPack);
+  ALL_PACKS.forEach((p) => {
+    try {
+      if (p) registerPack(p);
+    } catch (e) {
+      console.warn("[Packs] register failed:", p?.key, e);
+    }
+  });
 }
