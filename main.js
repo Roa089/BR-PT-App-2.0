@@ -63,7 +63,6 @@ function fatal(msg, err) {
 }
 
 function createStoreAdapter() {
-  // Echte Store-API durchreichen (wichtig für Re-Renders)
   return { getState, setState, subscribe };
 }
 
@@ -77,20 +76,14 @@ function createAppContext() {
     sheetRoot: qs("#sheetRoot"),
   });
 
-  // optional: debug
-  window.UI = UI;
-
   const store = createStoreAdapter();
 
-  // init features (content + srs)
   initPacks();
   initSrs({ getState, setState });
 
-  // controllers
   const learnController = createLearnController({ store, ui: UI });
   const speakController = createSpeakController({ ui: UI });
 
-  // daily depends on router + controllers (wired later)
   let dailyController = null;
 
   return {
@@ -121,8 +114,10 @@ function createRenderer(ctx) {
   function bind(controller, router, renderFn) {
     if (typeof unbind === "function") unbind();
     if (controller?.bind) {
-      // WICHTIG: renderFn bekommt route + router
-      unbind = controller.bind(ctx.appEl, () => renderFn(router.getRoute(), router));
+      unbind = controller.bind(
+        ctx.appEl,
+        () => renderFn(router.getRoute(), router)
+      );
     } else {
       unbind = null;
     }
@@ -148,31 +143,26 @@ function createRenderer(ctx) {
         ctx.appEl.innerHTML = renderDailyView(c.getModel());
         bind(c, router, render);
       },
-
       learn: () => {
         const c = ctx.controllers.learnController;
         ctx.appEl.innerHTML = renderLearnView(c.getModel());
         bind(c, router, render);
       },
-
       speak: () => {
         const c = ctx.controllers.speakController;
         ctx.appEl.innerHTML = renderSpeakView(c.getModel());
         bind(c, router, render);
       },
-
       stats: () => {
         const model = buildStats(state);
         ctx.appEl.innerHTML = renderStatsView(model);
         if (typeof unbind === "function") unbind();
         unbind = null;
       },
-
       explore: () => renderFallback(route),
       settings: () => renderFallback(route),
     };
 
-    // FIX: Default muss daily-FUNKTION sein, nicht Wrapper der nur zurückgibt
     const fn = routeHandlers[route] || routeHandlers.daily;
     fn();
   }
@@ -198,19 +188,15 @@ function start() {
   router.start();
   renderer.render(router.getRoute(), router);
 
-  // Service Worker: robust (nach load)
-  window.addEventListener("load", () => {
-    try {
-      registerServiceWorker("./sw.js", { scope: "./" }); // falls sw-register.js opts akzeptiert
-    } catch (e) {
-      console.warn("Service Worker Registrierung fehlgeschlagen:", e);
-    }
-  });
+  registerServiceWorker("./sw.js");
 }
 
-// Extra: Fehler sichtbar machen statt “still”
-window.addEventListener("error", (e) => fatal("Uncaught error", e.error || e.message));
-window.addEventListener("unhandledrejection", (e) => fatal("Unhandled promise rejection", e.reason));
+window.addEventListener("error", (e) =>
+  fatal("Uncaught error", e.error || e.message)
+);
+window.addEventListener("unhandledrejection", (e) =>
+  fatal("Unhandled promise rejection", e.reason)
+);
 
 document.addEventListener("DOMContentLoaded", () => {
   try {
