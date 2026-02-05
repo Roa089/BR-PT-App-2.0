@@ -6,7 +6,7 @@
    - Mastery donut (rough)
    ========================================= */
 
-export function buildStats(state, { now = new Date() } = {}) {
+export function buildStats(state = {}, { now = new Date() } = {}) {
   const missions = state.missions || {};
   const progress = state.progress || {};
 
@@ -14,10 +14,11 @@ export function buildStats(state, { now = new Date() } = {}) {
   const streak = Math.max(0, Number(missions.streak || 0));
 
   const todayKey = toDayKey(now);
-  const today = (missions.dailyProgress || {})[todayKey] || { reviews: 0, newInput: 0, speaking: 0, story: 0, xpEarned: 0 };
+  const dp = missions.dailyProgress || {};
+  const today = dp[todayKey] || { reviews: 0, newInput: 0, speaking: 0, story: 0, xpEarned: 0 };
 
   const week = last7Days(now).map((k) => {
-    const e = (missions.dailyProgress || {})[k] || { xpEarned: 0 };
+    const e = dp[k] || { xpEarned: 0 };
     return { dayKey: k, xp: Math.max(0, Number(e.xpEarned || 0)) };
   });
 
@@ -32,13 +33,11 @@ export function buildStats(state, { now = new Date() } = {}) {
   return { kpis, week, mastery };
 }
 
-function computeMastery(progress, state) {
-  // Rough mastery: fraction of cards with reps>=3 in comprehension and reps>=2 in production
+function computeMastery(progress = {}, state = {}) {
   const comp = progress.comprehensionSrs || {};
   const prod = progress.productionSrs || {};
 
-  // Determine deck size estimate
-  const imported = state.content?.importedCards?.length || 0;
+  const imported = Math.max(0, Number(state.content?.importedCards?.length || 0));
   const seenIds = new Set([...Object.keys(comp), ...Object.keys(prod)]);
   const deckSize = Math.max(seenIds.size, imported, 1);
 
@@ -56,16 +55,18 @@ function computeMastery(progress, state) {
 }
 
 function toDayKey(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const da = String(d.getDate()).padStart(2, "0");
+  const dt = d instanceof Date ? d : new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const da = String(dt.getDate()).padStart(2, "0");
   return `${y}-${m}-${da}`;
 }
 
 function last7Days(now) {
   const out = [];
+  const base = now instanceof Date ? now : new Date(now);
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
+    const d = new Date(base);
     d.setDate(d.getDate() - i);
     out.push(toDayKey(d));
   }
@@ -73,5 +74,6 @@ function last7Days(now) {
 }
 
 function clamp(n, a, b) {
+  if (!Number.isFinite(n)) return a;
   return Math.max(a, Math.min(b, n));
 }
