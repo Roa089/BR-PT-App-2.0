@@ -14,15 +14,11 @@ let _setState = null;
  * progressStore must expose:
  *  - getState(): returns global state
  *  - setState(fnOrObj): updates global state
- *
- * It must store progress in:
- *  state.progress.comprehensionSrs
- *  state.progress.productionSrs
  */
 export function init(progressStore) {
-  _store = progressStore;
-  _getState = progressStore.getState;
-  _setState = progressStore.setState;
+  _store = progressStore || null;
+  _getState = progressStore?.getState || null;
+  _setState = progressStore?.setState || null;
 }
 
 /* ---------- Public API ---------- */
@@ -35,7 +31,7 @@ export function schedule(track, cardId, rating) {
   if (!id) return null;
 
   const now = Date.now();
-  const s = _getState();
+  const s = safeState();
   const prog = s.progress?.[trKey] || {};
   const prev = prog[id] || defaultItem();
 
@@ -58,16 +54,17 @@ export function schedule(track, cardId, rating) {
 export function getDue(track, cards, filters = {}) {
   assertInit();
   const trKey = trackKey(track);
-  const s = _getState();
+  const s = safeState();
   const prog = s.progress?.[trKey] || {};
   const now = Date.now();
 
   const list = applyFilters(cards || [], filters);
 
-  // due = reps>0 && due<=now
   return list
     .filter((c) => {
-      const p = prog[c.id];
+      const id = c?.id;
+      if (!id) return false;
+      const p = prog[id];
       return p && (p.reps || 0) > 0 && (p.due || 0) <= now;
     })
     .sort((a, b) => (prog[a.id].due || 0) - (prog[b.id].due || 0));
@@ -75,35 +72,31 @@ export function getDue(track, cards, filters = {}) {
 
 export function getNew(cards, filters = {}, limit = 50) {
   assertInit();
-  const s = _getState();
-  // "new" means not seen in comprehension track (baseline)
+  const s = safeState();
   const seen = s.progress?.comprehensionSrs || {};
 
   const list = applyFilters(cards || [], filters);
   const out = [];
+  const lim = Math.max(0, Math.floor(Number(limit) || 0));
+
   for (const c of list) {
-    if (out.length >= limit) break;
-    const p = seen[c.id];
+    if (out.length >= lim) break;
+    const id = c?.id;
+    if (!id) continue;
+    const p = seen[id];
     if (!p || (p.reps || 0) === 0) out.push(c);
   }
   return out;
 }
 
-/**
- * getMixedSession(cards, filters, limits)
- * limits = { due: number, new: number }
- * returns shuffled-ish: mix due + new
- */
 export function getMixedSession(cards, filters = {}, limits = { due: 30, new: 20 }) {
-  const dueCount = Math.max(0, Number(limits?.due ?? 30));
-  const newCount = Math.max(0, Number(limits?.new ?? 20));
+  const dueCount = Math.max(0, Math.floor(Number(limits?.due ?? 30)));
+  const newCount = Math.max(0, Math.floor(Number(limits?.new ?? 20)));
 
-  // Use comprehension due as baseline "reviews"
   const due = getDue("comprehension", cards, filters).slice(0, dueCount);
   const neu = getNew(cards, filters, newCount);
 
-  const mixed = interleave(due, neu);
-  return mixed;
+  return interleave(due, neu);
 }
 
 /* ---------- Internals ---------- */
@@ -112,8 +105,8 @@ function defaultItem() {
   return {
     reps: 0,
     lapses: 0,
-    ease: 2.4,        // SM2-ish starting ease
-    interval: 0,      // days
+    ease: 2.4,
+    interval: 0,
     due: 0,
     lastRatedAt: 0,
     lastRating: null
@@ -123,10 +116,10 @@ function defaultItem() {
 function computeNext(prev, rating, now) {
   const p = { ...defaultItem(), ...(prev || {}) };
 
-  let ease = clamp(p.ease || 2.4, 1.3, 2.8);
-  let reps = Math.max(0, p.reps || 0);
-  let lapses = Math.max(0, p.lapses || 0);
-  let intervalDays = Math.max(0, p.interval || 0);
+  let ease = clamp(Number(p.ease || 2.4), 1.3, 2.8);
+  let reps = Math.max(0, Number(p.reps || 0));
+  let lapses = Math.max(0, Number(p.lapses || 0));
+  let intervalDays = Math.max(0, Number(p.interval || 0));
 
   const hardPenalty = 0.15;
   const okBoost = 0.05;
@@ -134,12 +127,10 @@ function computeNext(prev, rating, now) {
   const failPenalty = 0.20;
 
   if (rating === "fail") {
-    // reset interval but keep some learning
     lapses += 1;
-    reps = 1; // keep "seen"
-    intervalDays = 0; // immediate relearn
+    reps = Math.max(1, reps); // keep "seen"
+    intervalDays = 0;
     ease = clamp(ease - failPenalty, 1.3, 2.8);
-    // due soon (10 minutes)
     return {
       reps,
       lapses,
@@ -154,11 +145,9 @@ function computeNext(prev, rating, now) {
   // success path
   reps += 1;
 
-  // base interval schedule
-  if (reps === 1) intervalDays = 0;       // first success -> later today
-  else if (reps === 2) intervalDays = 1;  // next day
+  if (reps === 1) intervalDays = 0;
+  else if (reps === 2) intervalDays = 1;
   else {
-    // SM2-ish: interval *= ease
     const base = intervalDays <= 0 ? 2 : intervalDays;
     intervalDays = Math.round(base * ease);
   }
@@ -166,22 +155,17 @@ function computeNext(prev, rating, now) {
   if (rating === "hard") {
     ease = clamp(ease - hardPenalty, 1.3, 2.8);
     intervalDays = Math.max(0, Math.round(intervalDays * 0.6));
-  }
-
-  if (rating === "ok") {
+  } else if (rating === "ok") {
     ease = clamp(ease + okBoost, 1.3, 2.8);
     intervalDays = Math.max(intervalDays, reps >= 3 ? 2 : intervalDays);
-  }
-
-  if (rating === "easy") {
+  } else if (rating === "easy") {
     ease = clamp(ease + easyBoost, 1.3, 2.8);
     intervalDays = Math.max(1, Math.round(intervalDays * 1.35));
   }
 
-  // due calc
   let due;
-  if (reps === 1) due = todayAtHour(18);          // later today
-  else if (reps === 2) due = now + 24 * HOUR;     // tomorrow
+  if (reps === 1) due = todayAtHour(18);
+  else if (reps === 2) due = now + 24 * HOUR;
   else due = now + intervalDays * DAY;
 
   return {
@@ -199,41 +183,39 @@ function todayAtHour(hour24) {
   const d = new Date();
   d.setHours(hour24, 0, 0, 0);
   const t = d.getTime();
-  // if already past, push to +2 hours
   return t > Date.now() ? t : Date.now() + 2 * HOUR;
 }
 
 function trackKey(track) {
   const t = String(track || "").toLowerCase();
-  if (t === "production") return "productionSrs";
-  return "comprehensionSrs";
+  return t === "production" ? "productionSrs" : "comprehensionSrs";
 }
 
 function normalizeRating(r) {
   const x = String(r || "").toLowerCase();
-  if (x === "fail" || x === "hard" || x === "ok" || x === "easy") return x;
-  return "ok";
+  return x === "fail" || x === "hard" || x === "ok" || x === "easy" ? x : "ok";
 }
 
 function applyFilters(cards, filters) {
-  let out = [...(cards || [])];
-  const cefr = asSet(filters.cefr);
-  const topics = asSet(filters.topics);
-  const skills = asSet(filters.skills);
-  const packKeys = asSet(filters.packs); // optional
+  let out = Array.isArray(cards) ? cards.filter(Boolean) : [];
 
-  if (cefr) out = out.filter(c => cefr.has(c.cefr));
-  if (topics) out = out.filter(c => topics.has(c.topic));
-  if (skills) out = out.filter(c => skills.has(c.skill));
-  if (packKeys) out = out.filter(c => !c.pack || packKeys.has(c.pack));
+  const cefr = asSet(filters?.cefr);
+  const topics = asSet(filters?.topics);
+  const skills = asSet(filters?.skills);
+  const packKeys = asSet(filters?.packs);
+
+  if (cefr) out = out.filter((c) => cefr.has(c?.cefr));
+  if (topics) out = out.filter((c) => topics.has(c?.topic));
+  if (skills) out = out.filter((c) => skills.has(c?.skill));
+  if (packKeys) out = out.filter((c) => !c?.pack || packKeys.has(c.pack));
 
   return out;
 }
 
 function interleave(a, b) {
   const out = [];
-  const A = [...a];
-  const B = [...b];
+  const A = Array.isArray(a) ? [...a] : [];
+  const B = Array.isArray(b) ? [...b] : [];
   shuffle(A);
   shuffle(B);
 
@@ -246,7 +228,7 @@ function interleave(a, b) {
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = (Math.random() * (i + 1)) | 0;
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
@@ -260,11 +242,22 @@ function asSet(v) {
 }
 
 function clamp(n, a, b) {
+  if (!Number.isFinite(n)) return a;
   return Math.max(a, Math.min(b, n));
 }
 
+function safeState() {
+  try {
+    return _getState?.() || {};
+  } catch {
+    return {};
+  }
+}
+
 function assertInit() {
-  if (!_store || !_getState || !_setState) throw new Error("SRS engine not initialized. Call init(store) first.");
+  if (!_store || !_getState || !_setState) {
+    throw new Error("SRS engine not initialized. Call init(store) first.");
+  }
 }
 
 const HOUR = 60 * 60 * 1000;
