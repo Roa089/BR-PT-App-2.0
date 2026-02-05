@@ -6,42 +6,50 @@
 
 export function createUI({ toastRoot, modalRoot, sheetRoot } = {}) {
   let toastTimer = null;
+  let modalAbort = null;
+  let sheetAbort = null;
 
   function toast(message, ms = 2200) {
     if (!toastRoot) return;
-    toastRoot.innerHTML = `<div class="toast">${escapeHtml(String(message))}</div>`;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (toastRoot.innerHTML = ""), ms);
+    toastRoot.innerHTML = `<div class="toast">${escapeHtml(String(message))}</div>`;
+    toastTimer = setTimeout(() => {
+      if (toastRoot) toastRoot.innerHTML = "";
+    }, Math.max(0, Number(ms) || 0));
   }
 
   function openModal(html) {
     if (!modalRoot) return;
+    cleanupModal();
     modalRoot.hidden = false;
     modalRoot.innerHTML = `
       <div class="backdrop" data-close="1"></div>
       <div class="modal">${html}</div>
     `;
-    bindClose(modalRoot, closeModal);
+    modalAbort = bindClose(modalRoot, closeModal);
   }
 
   function closeModal() {
     if (!modalRoot) return;
+    cleanupModal();
     modalRoot.hidden = true;
     modalRoot.innerHTML = "";
   }
 
   function openSheet(html) {
     if (!sheetRoot) return;
+    cleanupSheet();
     sheetRoot.hidden = false;
     sheetRoot.innerHTML = `
       <div class="backdrop" data-close="1"></div>
       <div class="sheet">${html}</div>
     `;
-    bindClose(sheetRoot, closeSheet);
+    sheetAbort = bindClose(sheetRoot, closeSheet);
   }
 
   function closeSheet() {
     if (!sheetRoot) return;
+    cleanupSheet();
     sheetRoot.hidden = true;
     sheetRoot.innerHTML = "";
   }
@@ -55,30 +63,48 @@ export function createUI({ toastRoot, modalRoot, sheetRoot } = {}) {
         <button class="btn" id="uiNo" data-close="1" type="button">${escapeHtml(noLabel)}</button>
       </div>
     `);
-    document.querySelector("#uiYes")?.addEventListener("click", () => onYes?.());
+    const yesBtn = document.querySelector("#uiYes");
+    if (yesBtn) {
+      yesBtn.addEventListener("click", () => {
+        try { onYes?.(); } finally { closeSheet(); }
+      }, { once: true });
+    }
   }
 
   function bindClose(root, onClose) {
+    const ac = new AbortController();
+    const { signal } = ac;
+
     root.querySelectorAll("[data-close]").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        // If backdrop clicked or button clicked
-        const isBackdrop = el.classList.contains("backdrop");
-        if (isBackdrop || el.tagName.toLowerCase() === "button") onClose();
-        else onClose();
-      });
+      el.addEventListener("click", () => onClose(), { signal });
     });
 
-    // ESC support for desktop
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") onClose();
-    }, { once: true });
+    }, { signal });
+
+    return ac;
+  }
+
+  function cleanupModal() {
+    if (modalAbort) {
+      modalAbort.abort();
+      modalAbort = null;
+    }
+  }
+
+  function cleanupSheet() {
+    if (sheetAbort) {
+      sheetAbort.abort();
+      sheetAbort = null;
+    }
   }
 
   return { toast, openModal, closeModal, openSheet, closeSheet, confirm };
 }
 
 function escapeHtml(s) {
-  return String(s)
+  return String(s ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
