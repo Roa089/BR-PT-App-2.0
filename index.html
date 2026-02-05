@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0c12" />
+  <meta name="theme-color" content="#0b0f14" />
   <title>PT-BR Trainer 2.0</title>
 
   <!-- iOS PWA -->
@@ -12,54 +12,55 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="PT-BR 2.0" />
 
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" href="./icons/icon-192.png" />
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <div class="brand-badge">PT</div>
+        <div class="brand-badge" aria-hidden="true">PT</div>
         <div class="brand-text">
           <div class="brand-title">PT-BR Trainer <span class="muted">2.0</span></div>
           <div class="brand-sub">Daily Flow • Lernen • Sprechen</div>
         </div>
       </div>
-      <button class="iconbtn" id="btnQuick" aria-label="Quick actions">⋯</button>
+
+      <button class="iconbtn" id="btnQuick" type="button" aria-label="Quick actions">⋯</button>
     </div>
   </header>
 
-  <main id="app" class="app"></main>
+  <main id="app" class="app" role="main"></main>
 
   <nav class="tabbar" aria-label="Navigation">
-    <button class="tab active" data-route="daily" aria-label="Daily">
-      <span class="tab-ico">⚡</span><span class="tab-lbl">Daily</span>
+    <button class="tab active" data-route="daily" type="button" aria-label="Daily">
+      <span class="tab-ico" aria-hidden="true">⚡</span><span class="tab-lbl">Daily</span>
     </button>
-    <button class="tab" data-route="learn" aria-label="Lernen">
-      <span class="tab-ico">📚</span><span class="tab-lbl">Lernen</span>
+    <button class="tab" data-route="learn" type="button" aria-label="Lernen">
+      <span class="tab-ico" aria-hidden="true">📚</span><span class="tab-lbl">Lernen</span>
     </button>
-    <button class="tab" data-route="speak" aria-label="Sprechen">
-      <span class="tab-ico">🎤</span><span class="tab-lbl">Sprechen</span>
+    <button class="tab" data-route="speak" type="button" aria-label="Sprechen">
+      <span class="tab-ico" aria-hidden="true">🎤</span><span class="tab-lbl">Sprechen</span>
     </button>
-    <button class="tab" data-route="explore" aria-label="Themen">
-      <span class="tab-ico">🧭</span><span class="tab-lbl">Themen</span>
+    <button class="tab" data-route="explore" type="button" aria-label="Themen">
+      <span class="tab-ico" aria-hidden="true">🧭</span><span class="tab-lbl">Themen</span>
     </button>
-    <button class="tab" data-route="stats" aria-label="Stats">
-      <span class="tab-ico">📈</span><span class="tab-lbl">Stats</span>
+    <button class="tab" data-route="stats" type="button" aria-label="Stats">
+      <span class="tab-ico" aria-hidden="true">📈</span><span class="tab-lbl">Stats</span>
     </button>
-    <button class="tab" data-route="settings" aria-label="Settings">
-      <span class="tab-ico">⚙️</span><span class="tab-lbl">Settings</span>
+    <button class="tab" data-route="settings" type="button" aria-label="Settings">
+      <span class="tab-ico" aria-hidden="true">⚙️</span><span class="tab-lbl">Settings</span>
     </button>
   </nav>
 
   <!-- UI Roots -->
   <div id="toastRoot" class="toastRoot" aria-live="polite" aria-atomic="true"></div>
-  <div id="modalRoot" class="modalRoot" hidden></div>
-  <div id="sheetRoot" class="sheetRoot" hidden></div>
+  <div id="modalRoot" class="modalRoot" hidden aria-hidden="true"></div>
+  <div id="sheetRoot" class="sheetRoot" hidden aria-hidden="true"></div>
 
-  <script type="module" src="main.js"></script>
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
