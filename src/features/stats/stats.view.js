@@ -6,19 +6,22 @@
    - Mastery donut (SVG)
    ========================================= */
 
-export function renderStatsView(model) {
-  const { kpis, week, mastery } = model;
+export function renderStatsView(model = {}) {
+  const kpis = model.kpis || { xpTotal: 0, streak: 0, todayXP: 0 };
+  const week = Array.isArray(model.week) ? model.week : [];
+  const mastery = model.mastery || { ratio: 0, mastered: 0, deckSize: 1 };
 
-  const maxXP = Math.max(1, ...week.map(d => d.xp));
+  const maxXP = Math.max(1, ...week.map((d) => Math.max(0, Number(d?.xp || 0))));
   const bars = week.map((d) => {
-    const h = Math.round((d.xp / maxXP) * 46);
-    const lbl = d.dayKey.slice(5); // MM-DD
+    const xp = Math.max(0, Number(d?.xp || 0));
+    const h = Math.round((xp / maxXP) * 46);
+    const lbl = String(d?.dayKey || "").slice(5) || "—"; // MM-DD
     return `
       <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
         <div style="width:12px; height:52px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); display:flex; align-items:flex-end; overflow:hidden;">
           <div style="width:100%; height:${h}px; background:rgba(34,197,94,.35); border-top:1px solid rgba(34,197,94,.55);"></div>
         </div>
-        <div class="small muted">${lbl}</div>
+        <div class="small muted">${escapeHtml(lbl)}</div>
       </div>
     `;
   }).join("");
@@ -33,7 +36,7 @@ export function renderStatsView(model) {
 
       <div class="row">
         ${kpiCard("XP gesamt", kpis.xpTotal)}
-        ${kpiCard("Streak", `${kpis.streak} 🔥`)}
+        ${kpiCard("Streak", `${Math.max(0, Number(kpis.streak || 0))} 🔥`)}
         ${kpiCard("Heute XP", kpis.todayXP)}
       </div>
     </div>
@@ -41,10 +44,10 @@ export function renderStatsView(model) {
     <div class="card">
       <div class="row" style="justify-content:space-between;">
         <div class="title" style="margin:0;">Letzte 7 Tage</div>
-        <div class="pill">Max: ${maxXP} XP</div>
+        <div class="pill">Max: ${escapeHtml(String(maxXP))} XP</div>
       </div>
       <div style="display:flex; gap:10px; margin-top:14px; align-items:flex-end;">
-        ${bars}
+        ${bars || `<div class="muted">Noch keine Daten.</div>`}
       </div>
     </div>
 
@@ -61,9 +64,9 @@ export function renderStatsView(model) {
 
       <hr/>
       <div class="row">
-        <div class="pill">Mastered: <b>${mastery.mastered}</b></div>
-        <div class="pill">Deck: <b>${mastery.deckSize}</b></div>
-        <div class="pill">Rate: <b>${Math.round(mastery.ratio * 100)}%</b></div>
+        <div class="pill">Mastered: <b>${escapeHtml(String(Math.max(0, Number(mastery.mastered || 0))))}</b></div>
+        <div class="pill">Deck: <b>${escapeHtml(String(Math.max(1, Number(mastery.deckSize || 1))))}</b></div>
+        <div class="pill">Rate: <b>${escapeHtml(String(Math.round(clamp(Number(mastery.ratio || 0), 0, 1) * 100)))}%</b></div>
       </div>
     </div>
   `;
@@ -73,7 +76,7 @@ function kpiCard(label, value) {
   return `
     <div class="card" style="flex:1; margin:0; min-width:160px;">
       <div class="small muted">${escapeHtml(label)}</div>
-      <div class="title" style="margin:8px 0 0;">${escapeHtml(String(value))}</div>
+      <div class="title" style="margin:8px 0 0;">${escapeHtml(String(value ?? 0))}</div>
     </div>
   `;
 }
@@ -81,7 +84,8 @@ function kpiCard(label, value) {
 function renderDonut(ratio) {
   const r = 42;
   const c = 2 * Math.PI * r;
-  const filled = c * clamp(ratio, 0, 1);
+  const rr = clamp(Number(ratio || 0), 0, 1);
+  const filled = c * rr;
   const empty = c - filled;
 
   return `
@@ -104,13 +108,14 @@ function renderDonut(ratio) {
         />
       </g>
       <text x="60" y="64" text-anchor="middle" font-size="18" fill="rgba(244,246,255,.92)" font-weight="900">
-        ${Math.round(ratio * 100)}%
+        ${Math.round(rr * 100)}%
       </text>
     </svg>
   `;
 }
 
 function clamp(n, a, b) {
+  if (!Number.isFinite(n)) return a;
   return Math.max(a, Math.min(b, n));
 }
 
