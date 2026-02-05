@@ -1,5 +1,5 @@
 // src/features/learn/learn.view.js
-export function renderLearnView(model) {
+export function renderLearnView(model = {}) {
   if (!model?.card) {
     return `
       <div class="card">
@@ -9,18 +9,27 @@ export function renderLearnView(model) {
     `;
   }
 
-  const { card, flipped, step, index, total, compChoice } = model;
+  const {
+    card = {},
+    flipped = false,
+    step = "front",
+    index = 0,
+    total = 0,
+    compChoice = null
+  } = model;
+
+  const forms = Array.isArray(card.forms) ? card.forms : [];
 
   return `
     <div class="card">
       <div class="row" style="justify-content:space-between; align-items:center;">
-        <div class="pill">Karte ${index} / ${total}</div>
+        <div class="pill">Karte ${escapeHtml(String(index))} / ${escapeHtml(String(total))}</div>
         <button class="btn" data-act="learn:skip" type="button">Skip</button>
       </div>
 
       <div class="flip-card" style="margin-top:12px;">
         <div class="pt" style="font-size:22px; line-height:1.25;">
-          ${escapeHtml(card.pt)}
+          ${escapeHtml(card.pt || "—")}
         </div>
 
         <div class="flip-hint" style="margin-top:10px;">
@@ -34,14 +43,14 @@ export function renderLearnView(model) {
             ${escapeHtml(card.deHint || "—")}
           </div>
 
-          ${(card.forms?.length ? `
+          ${forms.length ? `
             <div style="margin-top:10px;">
               <div class="small muted">Forms</div>
               <div class="row" style="flex-wrap:wrap; margin-top:6px;">
-                ${card.forms.map(f => `<div class="pill">${escapeHtml(f)}</div>`).join("")}
+                ${forms.map((f) => `<div class="pill">${escapeHtml(f)}</div>`).join("")}
               </div>
             </div>
-          ` : ``)}
+          ` : ``}
         ` : ``}
       </div>
 
