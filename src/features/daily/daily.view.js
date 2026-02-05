@@ -4,8 +4,20 @@
    Output: minimal, motivating, 1 focus
    ========================================= */
 
-export function renderDailyView(model) {
-  const { timeBudgetMin, today, plan, weakTopics, hasTts } = model;
+export function renderDailyView(model = {}) {
+  const {
+    timeBudgetMin = 20,
+    today = {},
+    plan = { reviews: [], newInput: [], speaking: [] },
+    weakTopics = [],
+    hasTts = true
+  } = model;
+
+  const reviews = Array.isArray(plan.reviews) ? plan.reviews : [];
+  const newInput = Array.isArray(plan.newInput) ? plan.newInput : [];
+  const speaking = Array.isArray(plan.speaking) ? plan.speaking : [];
+
+  const xpToday = typeof today?.xpEarned === "number" ? today.xpEarned : 0;
 
   return `
     <div class="card">
@@ -14,17 +26,17 @@ export function renderDailyView(model) {
           <div class="title" style="margin:0;">🔥 Daily</div>
           <div class="muted">Dein Plan für heute — kurz, klar, machbar.</div>
         </div>
-        <div class="pill">${timeBudgetMin} min</div>
+        <div class="pill">${escapeHtml(String(timeBudgetMin))} min</div>
       </div>
 
       <div class="row" style="margin-top:12px;">
-        <button class="btn ${timeBudgetMin === 10 ? "primary" : ""}" data-act="daily:budget" data-val="10" type="button">10</button>
-        <button class="btn ${timeBudgetMin === 20 ? "primary" : ""}" data-act="daily:budget" data-val="20" type="button">20</button>
-        <button class="btn ${timeBudgetMin === 30 ? "primary" : ""}" data-act="daily:budget" data-val="30" type="button">30</button>
-        <button class="btn ${timeBudgetMin === 45 ? "primary" : ""}" data-act="daily:budget" data-val="45" type="button">45</button>
+        ${budgetBtn(10, timeBudgetMin)}
+        ${budgetBtn(20, timeBudgetMin)}
+        ${budgetBtn(30, timeBudgetMin)}
+        ${budgetBtn(45, timeBudgetMin)}
       </div>
 
-      ${weakTopics?.length ? `
+      ${Array.isArray(weakTopics) && weakTopics.length ? `
         <div style="margin-top:12px;">
           <div class="small muted">Heute priorisiert (Produktion schwach):</div>
           <div class="row" style="margin-top:8px; flex-wrap:wrap;">
@@ -36,10 +48,10 @@ export function renderDailyView(model) {
       <hr/>
 
       <div class="row">
-        ${metricPill("Reviews", plan.reviews.length)}
-        ${metricPill("New", plan.newInput.length)}
-        ${metricPill("Speak", plan.speaking.length)}
-        ${metricPill("Heute XP", today.xpEarned || 0)}
+        ${metricPill("Reviews", reviews.length)}
+        ${metricPill("New", newInput.length)}
+        ${metricPill("Speak", speaking.length)}
+        ${metricPill("Heute XP", xpToday)}
       </div>
 
       <div class="row" style="margin-top:14px;">
@@ -48,19 +60,24 @@ export function renderDailyView(model) {
         <button class="btn" data-act="daily:refresh" type="button">↻ Neu planen</button>
       </div>
 
-      ${!hasTts ? `<div class="flip-hint">TTS nicht verfügbar (oder blockiert). Speak/Shadowing funktioniert dann ohne Audio.</div>` : ""}
+      ${!hasTts ? `<div class="small muted" style="margin-top:10px;">TTS nicht verfügbar. Speak/Shadowing läuft ohne Audio.</div>` : ""}
 
       <hr/>
       <div class="small muted">Preview (erste Karten)</div>
-      ${previewList("Reviews", plan.reviews)}
-      ${previewList("New Input", plan.newInput)}
-      ${previewList("Speaking", plan.speaking.map(x => ({ id:x.id, pt:x.pt, deHint:"" })))}
+      ${previewList("Reviews", reviews)}
+      ${previewList("New Input", newInput)}
+      ${previewList("Speaking", speaking.map(x => ({ id: x?.id, pt: x?.pt, deHint: "" })))}
     </div>
   `;
 }
 
+function budgetBtn(val, current) {
+  const isActive = Number(current) === Number(val);
+  return `<button class="btn ${isActive ? "primary" : ""}" data-act="daily:budget" data-val="${val}" type="button">${val}</button>`;
+}
+
 function previewList(title, cards) {
-  const list = (cards || []).slice(0, 3);
+  const list = Array.isArray(cards) ? cards.slice(0, 3) : [];
   return `
     <div style="margin-top:10px;">
       <div class="pill">${escapeHtml(title)} • Preview</div>
@@ -68,8 +85,8 @@ function previewList(title, cards) {
         <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
           ${list.map(c => `
             <div class="card" style="margin:0;">
-              <div class="pt">${escapeHtml(c.pt || "—")}</div>
-              ${c.deHint ? `<div class="small muted" style="margin-top:6px;">${escapeHtml(c.deHint)}</div>` : ``}
+              <div class="pt">${escapeHtml(c?.pt || "—")}</div>
+              ${c?.deHint ? `<div class="small muted" style="margin-top:6px;">${escapeHtml(c.deHint)}</div>` : ``}
             </div>
           `).join("")}
         </div>
