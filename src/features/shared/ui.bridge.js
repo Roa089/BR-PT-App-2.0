@@ -1,11 +1,16 @@
 // src/features/shared/ui.bridge.js
 // Minimal bridge, damit Imports nicht crashen.
-// Wenn du window.UI (aus core/ui.js) nutzt, kannst du es hier durchreichen.
+// Reicht window.UI (aus core/ui.js) defensiv durch.
+
 export function toast(msg) {
+  const m = String(msg ?? "");
   try {
-    if (window.UI?.toast) window.UI.toast(msg);
-    else console.log(msg);
+    if (typeof window !== "undefined" && window.UI && typeof window.UI.toast === "function") {
+      window.UI.toast(m);
+    } else {
+      console.log(m);
+    }
   } catch {
-    console.log(msg);
+    console.log(m);
   }
 }
