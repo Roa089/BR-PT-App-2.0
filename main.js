@@ -4,6 +4,14 @@
    GitHub Pages • Vanilla JS • iPhone-first
    ========================================= */
 
+// Wenn URL ?nosw=1 -> Service Worker entfernen (nur für Debug)
+const url = new URL(location.href);
+if (url.searchParams.get("nosw") === "1" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((r) => r.unregister());
+  });
+}
+
 import { registerServiceWorker } from "./src/core/sw-register.js";
 import { createUI } from "./src/core/ui.js";
 import { createRouter } from "./src/core/router.js";
