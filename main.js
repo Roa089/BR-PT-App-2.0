@@ -3,6 +3,8 @@
    PT-BR Trainer 2.0 — Entry (ES Modules)
    GitHub Pages • Vanilla JS • iPhone-first
    ========================================= */
+import { createExploreController } from "./src/features/explore/explore.controller.js";
+import { renderExploreView } from "./src/features/explore/explore.view.js";
 
 import { registerServiceWorker } from "./src/core/sw-register.js";
 import { createUI } from "./src/core/ui.js";
@@ -180,7 +182,7 @@ function createAppContext() {
     appEl,
     UI,
     store,
-    controllers: { learnController, speakController },
+    controllers: { learnController, speakController, exploreController },
     getOrCreateDailyController(router) {
       if (!dailyController) {
         dailyController = createDailyController({
@@ -261,6 +263,12 @@ function createRenderer(ctx) {
       explore: () => renderFallback(route),
       settings: () => renderFallback(route),
     };
+     explore: () => {
+  const c = ctx.controllers.exploreController;
+  ctx.appEl.innerHTML = renderExploreView(c.getModel());
+  bind(c, router, render);
+},
+
 
     const fn = routeHandlers[route] || routeHandlers.daily;
 
@@ -277,8 +285,11 @@ function createRenderer(ctx) {
 /* ---------- Start ---------- */
 
 function start() {
+  const exploreController = createExploreController({ ui: UI, router: null });
   const ctx = createAppContext();
   const renderer = createRenderer(ctx);
+   ctx.controllers.exploreController = createExploreController({ ui: ctx.UI, router });
+
 
   const router = createRouter({
     defaultRoute: "daily",
