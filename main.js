@@ -3,6 +3,9 @@
    PT-BR Trainer 2.0 — Entry (ES Modules)
    GitHub Pages • Vanilla JS • iPhone-first
    ========================================= */
+import { createSettingsController } from "./src/features/settings/settings.controller.js";
+import { renderSettingsView } from "./src/features/settings/settings.view.js";
+
 import { createExploreController } from "./src/features/explore/explore.controller.js";
 import { renderExploreView } from "./src/features/explore/explore.view.js";
 
