@@ -138,6 +138,7 @@ function createStoreAdapter() {
 
 function createAppContext() {
   ensureRoots();
+  const settingsController = createSettingsController({ ui: UI });
 
   const appEl = qs("#app");
   if (!appEl) throw new Error("Missing #app element in index.html");
@@ -185,7 +186,7 @@ function createAppContext() {
     appEl,
     UI,
     store,
-    controllers: { learnController, speakController, exploreController },
+    controllers: { learnController, speakController, exploreController, settingsController },
     getOrCreateDailyController(router) {
       if (!dailyController) {
         dailyController = createDailyController({
@@ -243,6 +244,13 @@ function createRenderer(ctx) {
         const c = ctx.getOrCreateDailyController(router);
         ctx.appEl.innerHTML = renderDailyView(c.getModel());
         bind(c, router, render);
+         settings: () => {
+ 
+            const c = ctx.controllers.settingsController;
+  ##ctx.appEl.innerHTML = renderSettingsView(c.getModel());
+  bind(c, router, render);
+},
+
       },
 
       learn: () => {
